@@ -9,7 +9,7 @@
 // TODO(from yuzisee): Replace with actual holdem engine
 class Test {
   public:
-    Test(std::string onDiskId, double startingChips)
+    Test(const std::string &onDiskId, double startingChips)
     :
     //fA(startingChips)
     //,
@@ -280,10 +280,10 @@ v8::Handle<v8::Value> ShutdownTable(const v8::Arguments& args) {
 
 // Create a JSON object of the form:
 //  {'id': 'Nav', 'action': 'raiseTo', 'amount': 5.0}
-static v8::Local<v8::Object> betToJson(std::string id, std::string action, double amount) {
+static v8::Local<v8::Object> betToJson(const char * const id, const char * const action, double amount) {
   v8::Local<v8::Object> obj = v8::Object::New();
-  obj->Set(v8::String::NewSymbol("id"), v8::String::New(id.c_str()));
-  obj->Set(v8::String::NewSymbol("action"), v8::String::New(action.c_str()));
+  obj->Set(v8::String::NewSymbol("id"), v8::String::New(id));
+  obj->Set(v8::String::NewSymbol("action"), v8::String::New(action));
   obj->Set(v8::String::NewSymbol("amount"), v8::Number::New(amount));
   return obj;
 }
@@ -291,9 +291,9 @@ static v8::Local<v8::Object> betToJson(std::string id, std::string action, doubl
 
 // Create a JSON object of the form:
 //  {'checkpoint': 'flop'}
-static v8::Local<v8::Object> checkpointToJson(std::string name) {
+static v8::Local<v8::Object> checkpointToJson(const char * const name) {
   v8::Local<v8::Object> obj = v8::Object::New();
-  obj->Set(v8::String::NewSymbol("checkpoint"), v8::String::New(name.c_str()));
+  obj->Set(v8::String::NewSymbol("checkpoint"), v8::String::New(name));
   return obj;
 }
 
@@ -323,18 +323,19 @@ v8::Handle<v8::Value> GetActionSituation(const v8::Arguments& args) {
 
   const uint32_t handNum = args[1]->Uint32Value();
 
-  if (handNum < 0) {
+  if (handNum < 1) {
     return scope.Close(v8::Undefined());
   }
 
   // === Populate bets
 
-  v8::Handle<v8::Array> bets = v8::Array::New(5);
+  v8::Handle<v8::Array> bets = v8::Array::New(6);
   bets->Set(0, betToJson("Nav", "smallBlind", 5.0));
   bets->Set(1, betToJson("Joseph", "bigBlind", 10.0));
   bets->Set(2, betToJson("Nav", "call", 10.0));
   bets->Set(3, checkpointToJson("flop"));
   bets->Set(4, betToJson("Nav", "raiseTo", 10.0));
+  bets->Set(4, betToJson("Joseph", "check", 10.0));
  
   // === Populate chipCounts
 
@@ -389,10 +390,87 @@ v8::Handle<v8::Value> GetStatus(const v8::Arguments& args) {
 
   v8::Local<v8::Object> obj = v8::Object::New();
   obj->Set(v8::String::NewSymbol("currentHand"), v8::Uint32::New(4));
-  obj->Set(v8::String::NewSymbol("actionOn"), v8::String::New("Nav"));
+  obj->Set(v8::String::NewSymbol("actionOn"), v8::String::New("Joseph"));
 
   return scope.Close(obj);
 }
+
+// Create a JSON object of the form:
+// {'cards', ['9s', 'Th'], 'outcome': 'Full House: Nines over Tens'}
+static v8::Local<v8::Object> showdownToJson(const char * const card0, const char * const card1, const char * const outcome) {
+  v8::Local<v8::Array> cards = v8::Array::New(2);
+  cards->Set(0, v8::String::New(card0));
+  cards->Set(1, v8::String::New(card1));
+
+  v8::Local<v8::Object> obj = v8::Object::New();
+  obj->Set(v8::String::NewSymbol("cards"), cards);
+  obj->Set(v8::String::NewSymbol("outcome"), v8::String::New(outcome));
+  return obj;
+}
+
+// Create a JSON object of the form:
+// {'cards', [], 'outcome': 'muck'}
+static v8::Local<v8::Object> muckToJson() {
+  v8::Local<v8::Array> cards = v8::Array::New(0);
+
+  v8::Local<v8::Object> obj = v8::Object::New();
+  obj->Set(v8::String::NewSymbol("cards"), cards);
+  obj->Set(v8::String::NewSymbol("outcome"), v8::String::New("muck"));
+  return obj;
+}
+
+
+
+
+
+v8::Handle<v8::Value> GetOutcome(const v8::Arguments& args) {
+  v8::HandleScope scope;
+
+  // === Validate arguments
+
+  if (args.Length() != 2) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Wrong number of arguments")));
+    return scope.Close(v8::Undefined());
+  }
+
+  if (!args[1]->IsUint32()) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Second argument must be an unsigned integer")));
+    return scope.Close(v8::Undefined());
+  }
+
+  // === Read arguments
+
+  const Test * const test = readFirstArgumentAsTable(args);
+
+  if (!test) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("First argument must be a object containg .id (must be a string and must match the onDiskId provided to startTable) and ._instance (must be an array of uint32 values)")));
+    return scope.Close(v8::Undefined());
+  }
+
+  const uint32_t handNum = args[1]->Uint32Value();
+
+  if (handNum < 1) {
+    return scope.Close(v8::Undefined());
+  }
+
+  // === Populate handsRevealed
+
+  v8::Handle<v8::Object> handsRevealed = v8::Object::New();
+  handsRevealed->Set(v8::String::NewSymbol("Nav"), showdownToJson("9s", "Th", "Full House: Nines over Tens"));
+  handsRevealed->Set(v8::String::NewSymbol("Joseph"), muckToJson());
+ 
+ 
+  // === Return result
+
+
+  v8::Local<v8::Object> obj = v8::Object::New();
+  obj->Set(v8::String::NewSymbol("winner"), v8::String::New("Nav"));
+  obj->Set(v8::String::NewSymbol("handsRevealed"), handsRevealed);
+
+  return scope.Close(obj);
+
+}
+
 
 
 
@@ -457,6 +535,21 @@ void Init(v8::Handle<v8::Object> exports) {
 */
   exports->Set(v8::String::NewSymbol("getStatus"),
      v8::FunctionTemplate::New(GetStatus)->GetFunction());
+
+ 
+/*
+  pokerai.exports.getOutcome({ 'id': <onDiskId>, '_instance': <instanceHandle> }, handNum)
+  JSON Response:
+  {
+    'winner': 'Nav',
+    'handsRevealed': {
+            'Nav': {'cards', ['9s', 'Th'], 'outcome': 'Full House: Nines over Tens'},
+            'Joseph': {'cards', [], 'outcome': 'muck'}
+           }
+  }
+*/
+  exports->Set(v8::String::NewSymbol("getOutcome"),
+     v8::FunctionTemplate::New(GetOutcome)->GetFunction());
 }
 
 // Our target is named "pokerai". See binding.gyp for more
