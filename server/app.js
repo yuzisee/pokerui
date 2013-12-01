@@ -5,7 +5,7 @@
 
 var express = require('express');
 var routes = require('./routes');
-// var user = require('./routes/user');
+var table = require('./routes/table');
 var http = require('http');
 var path = require('path');
 
@@ -14,6 +14,7 @@ var app = express();
 // all environments
 app.set('port', process.env.PORT || 3000);
 app.set('views', path.join(__dirname, 'views'));
+app.set('clients', path.join(__dirname, '/../client'));
 app.set('view engine', 'jade');
 app.use(express.favicon());
 app.use(express.logger('dev'));
@@ -30,6 +31,8 @@ if ('development' == app.get('env')) {
 }
 
 app.get('/', routes.index);
+app.get('/table', table.newTable);
+app.get('/table/:tableId', table.loadTable);
 // app.get('/users', user.list);
 
 http.createServer(app).listen(app.get('port'), function(){
