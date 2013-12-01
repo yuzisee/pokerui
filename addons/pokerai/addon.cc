@@ -8,7 +8,9 @@ v8::Handle<v8::Value> CreateObject(const v8::Arguments& args) {
   v8::HandleScope scope;
 
   v8::Local<v8::Object> obj = v8::Object::New();
-  obj->Set(v8::String::NewSymbol("msg"), args[0]->ToString());
+  obj->Set(v8::String::NewSymbol("status"), v8::String::New("OK"));
+  obj->Set(v8::String::NewSymbol("msg"), v8::String::New("SUCCESS"));
+  obj->Set(v8::String::NewSymbol("code"), v8::Number::New(0));
 
   return scope.Close(obj);
 }
