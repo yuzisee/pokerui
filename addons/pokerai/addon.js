@@ -12,6 +12,8 @@ console.log(outcome1);
 console.log("But what are Nav's cards?")
 console.log(outcome1['handsRevealed']['Nav']['cards']);
 
+console.log(addon.getHoleCards(obj1, 1));
+
 var rsp1 = addon.shutdownTable(obj1);
 
 console.log(rsp1);

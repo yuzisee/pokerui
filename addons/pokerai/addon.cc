@@ -472,6 +472,59 @@ v8::Handle<v8::Value> GetOutcome(const v8::Arguments& args) {
 }
 
 
+v8::Handle<v8::Value> GetHoleCards(const v8::Arguments& args) {
+  v8::HandleScope scope;
+
+  // === Validate arguments
+
+  if (args.Length() != 2) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Wrong number of arguments")));
+    return scope.Close(v8::Undefined());
+  }
+
+  if (!args[1]->IsUint32()) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Second argument must be an unsigned integer")));
+    return scope.Close(v8::Undefined());
+  }
+
+  // === Read arguments
+
+  const Test * const test = readFirstArgumentAsTable(args);
+
+  if (!test) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("First argument must be a object containg .id (must be a string and must match the onDiskId provided to startTable) and ._instance (must be an array of uint32 values)")));
+    return scope.Close(v8::Undefined());
+  }
+
+  const uint32_t seatNumber = args[1]->Uint32Value();
+
+  if (seatNumber > 12) {
+    return scope.Close(v8::Undefined());
+  }
+
+  // === Populate holeCards
+
+  v8::Local<v8::Array> cards = v8::Array::New(2);
+  cards->Set(0, v8::String::New("Th"));
+  cards->Set(1, v8::String::New("9s"));
+
+ 
+  // === Return result
+
+
+  v8::Local<v8::Object> obj = v8::Object::New();
+  obj->Set(v8::String::NewSymbol("cards"), cards);
+  obj->Set(v8::String::NewSymbol("_playerId"), v8::String::New("Nav"));
+
+  return scope.Close(obj);
+
+}
+
+
+
+
+
+
 
 
 // This creates the prototype/global/static (e.g. pokerai.exports.startTable())
@@ -550,6 +603,18 @@ void Init(v8::Handle<v8::Object> exports) {
 */
   exports->Set(v8::String::NewSymbol("getOutcome"),
      v8::FunctionTemplate::New(GetOutcome)->GetFunction());
+
+/*
+  pokerai.exports.getHoleCards({ 'id': <onDiskId>, '_instance': <instanceHandle> }, seatNum)
+  JSON Response:
+  {
+    '_playerId': 'Nav',
+    'holeCards': ['9s', 'Th']
+  }
+*/
+  exports->Set(v8::String::NewSymbol("getHoleCards"),
+     v8::FunctionTemplate::New(GetHoleCards)->GetFunction());
+
 }
 
 // Our target is named "pokerai". See binding.gyp for more
