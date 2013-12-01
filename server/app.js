@@ -38,10 +38,11 @@ app.get('/', routes.index);
 app.get('/table', table.table);
 app.get('/table/new', table.newTable);
 app.get('/table/:tableid', table.loadTable);
-app.get('/user', user.getAll);
-app.post('/user', user.postAll);
-app.get('/user/:userid', user.getUser);
-app.post('/user/:userid', user.postUser);
+global.users = [];
+app.get('/api/user', user.getAll);
+app.post('/api/user', user.postAll);
+app.get('/api/user/:userid', user.getUser);
+app.post('/api/user/:userid', user.postUser);
 
 http.createServer(app).listen(app.get('port'), function(){
   console.log('Express server listening on port ' + app.get('port'));

@@ -4,12 +4,13 @@
  */
 
 exports.getAll = function(req, res){
-  	exports.postAll(req, res);
+  	res.json(global.users);
 };
 
 exports.postAll = function(req, res){
 	if(!req.session.userid) {
 		req.session.userid = (""+Math.random()).substring(2,7);
+		global.users.push(req.session.userid);
 	}
 
 	req.params = {'userid': req.session.userid};

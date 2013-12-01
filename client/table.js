@@ -1,6 +1,6 @@
 angular.module('pokerui', ['ngResource'])
 	.factory('User', function($resource){
-		return $resource('/user/:userId', {userId:'@id'});
+		return $resource('/api/user/:userId', {userId:'@id'});
 	})
 	.controller('PkTable', function PkTable($scope, User) {
 
@@ -8,7 +8,7 @@ angular.module('pokerui', ['ngResource'])
 		$scope.user.$save({}, function(resource){
 			$scope.user = resource;
 		});
-		
+
 		$scope.save = function(user){
 			user.$save(function(user){
 				$scope.user = user;
