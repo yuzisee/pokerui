@@ -6,6 +6,7 @@
 #include <vector>
 #include <cstdio>
 
+// TODO(from yuzisee): Replace with actual holdem engine
 class Test {
   public:
     Test(std::string onDiskId, double startingChips)
@@ -13,6 +14,8 @@ class Test {
     //fA(startingChips)
     //,
     fOnDiskId(onDiskId)
+    ,
+    fHandNum(0)
     {}
     ~Test() {}
 
@@ -20,9 +23,18 @@ class Test {
         return fOnDiskId;
     }
 
+    int handNum() const {
+      return fHandNum;
+    }
+
+    void incrHandNum() {
+      ++fHandNum;
+    }
+
   private:
     //const double fA;
     const std::string fOnDiskId;
+    int fHandNum;
 };
 
 // Returns v8LittleEndianPtr.IsEmpty() on error.
@@ -53,7 +65,7 @@ static v8::Handle<v8::Array> marshallPtr(const Test * const test) {
 }
 
 // Return 0 on error
-static const Test * unmarshallPtr(v8::Handle<v8::Array> v8LittleEndianPtr)
+static const Test * unmarshallPtr(const v8::Handle<v8::Array> &v8LittleEndianPtr)
 {
   uintptr_t instance = 0; // 4 bytes: 0xffffffff mask
   for(size_t k=v8LittleEndianPtr->Length(); k > 0; --k) {
@@ -73,6 +85,57 @@ static const Test * unmarshallPtr(v8::Handle<v8::Array> v8LittleEndianPtr)
 
   return test;
 }
+
+// Read args[0] and interpret as a ``Test *`` handle
+// Returns 0 on error
+static const Test * readFirstArgumentAsTable(const v8::Arguments& args) {
+
+  // === Validate arguments
+
+  if (!args[0]->IsObject()) {
+    return 0;
+  }
+
+  v8::Local<v8::Object> arg0 = args[0]->ToObject();
+
+  if (!arg0->Get(v8::String::NewSymbol("id"))->IsString()) {
+    return 0;
+  }
+
+  if (!arg0->Get(v8::String::NewSymbol("_instance"))->IsArray()) {
+    return 0;
+  }
+
+
+
+  // === Read arguments
+
+  v8::Local<v8::String> argOnDiskId = arg0->Get(v8::String::NewSymbol("id"))->ToString();
+  v8::String::Utf8Value v8OnDiskId(argOnDiskId);
+  // Utf8Value's operator*() gives you a null terminated character array.
+  std::string cOnDiskId(*v8OnDiskId);
+
+  v8::Handle<v8::Array> v8LittleEndianPtr = v8::Handle<v8::Array>::Cast(
+      arg0->Get(v8::String::NewSymbol("_instance"))
+    );
+
+  // === Unmarshall/unserialize table instance pointer
+
+  const Test * const test = unmarshallPtr(v8LittleEndianPtr);
+
+  // === Health check!
+
+  if (!(cOnDiskId == test->onDiskId())) {
+    return 0;
+  }
+
+
+  // === Return result
+
+  return test;
+
+}
+
 
 // This function will be wrapped with 
 //   v8::FunctionTemplate::New(StartTable)->GetFunction()
@@ -192,55 +255,20 @@ v8::Handle<v8::Value> ShutdownTable(const v8::Arguments& args) {
     return scope.Close(v8::Undefined());
   }
 
-  if (!args[0]->IsObject()) {
-    v8::ThrowException(v8::Exception::TypeError(v8::String::New("First argument must be a object")));
-    return scope.Close(v8::Undefined());
-  }
-
-  v8::Local<v8::Object> arg0 = args[0]->ToObject();
-
-  if (!arg0->Get(v8::String::NewSymbol("id"))->IsString()) {
-    v8::ThrowException(v8::Exception::TypeError(v8::String::New(".id must be a string")));
-    return scope.Close(v8::Undefined());
-  }
-
-  if (!arg0->Get(v8::String::NewSymbol("_instance"))->IsArray()) {
-    v8::ThrowException(v8::Exception::TypeError(v8::String::New("._instance must be an array")));
-    return scope.Close(v8::Undefined());
-  }
-
-
-
   // === Read arguments
 
-  v8::Local<v8::String> argOnDiskId = arg0->Get(v8::String::NewSymbol("id"))->ToString();
-  v8::String::Utf8Value v8OnDiskId(argOnDiskId);
-  // Utf8Value's operator*() gives you a null terminated character array.
-  std::string cOnDiskId(*v8OnDiskId);
-
-  v8::Handle<v8::Array> v8LittleEndianPtr = v8::Handle<v8::Array>::Cast(
-      arg0->Get(v8::String::NewSymbol("_instance"))
-    );
-
-  // === Unmarshall/unserialize table instance pointer
-
-  const Test * const test = unmarshallPtr(v8LittleEndianPtr);
+  const Test * const test = readFirstArgumentAsTable(args);
 
   if (!test) {
-    v8::ThrowException(v8::Exception::TypeError(v8::String::New("._instance must contain uint32 values")));
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("First argument must be a object containg .id (must be a string) and ._instance (must be an array of uint32 values)")));
     return scope.Close(v8::Undefined());
   }
+
+
 
   // === Destruct table
 
-  if (cOnDiskId == test->onDiskId()) {
-    // Sanity check passed!
-    delete test;
-  } else {
-    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Data corruption: onDiskId doesn't match")));
-    return scope.Close(v8::Undefined());
-  }
-
+  delete test;
 
   // === Return result
 
@@ -248,6 +276,89 @@ v8::Handle<v8::Value> ShutdownTable(const v8::Arguments& args) {
   obj->Set(v8::String::NewSymbol("success"), v8::Boolean::New(true));
 
   return scope.Close(obj);
+}
+
+// Create a JSON object of the form:
+//  {'id': 'Nav', 'action': 'raiseTo', 'amount': 5.0}
+static v8::Local<v8::Object> betToJson(std::string id, std::string action, double amount) {
+  v8::Local<v8::Object> obj = v8::Object::New();
+  obj->Set(v8::String::NewSymbol("id"), v8::String::New(id.c_str()));
+  obj->Set(v8::String::NewSymbol("action"), v8::String::New(action.c_str()));
+  obj->Set(v8::String::NewSymbol("amount"), v8::Number::New(amount));
+  return obj;
+}
+
+
+// Create a JSON object of the form:
+//  {'checkpoint': 'flop'}
+static v8::Local<v8::Object> checkpointToJson(std::string name) {
+  v8::Local<v8::Object> obj = v8::Object::New();
+  obj->Set(v8::String::NewSymbol("checkpoint"), v8::String::New(name.c_str()));
+  return obj;
+}
+
+v8::Handle<v8::Value> GetActionSituation(const v8::Arguments& args) {
+  v8::HandleScope scope;
+
+  // === Validate arguments
+
+  if (args.Length() != 2) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Wrong number of arguments")));
+    return scope.Close(v8::Undefined());
+  }
+
+  if (!args[1]->IsUint32()) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Second argument must be an unsigned integer")));
+    return scope.Close(v8::Undefined());
+  }
+
+  // === Read arguments
+
+  const Test * const test = readFirstArgumentAsTable(args);
+
+  if (!test) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("First argument must be a object containg .id (must be a string and must match the onDiskId provided to startTable) and ._instance (must be an array of uint32 values)")));
+    return scope.Close(v8::Undefined());
+  }
+
+  const uint32_t handNum = args[1]->Uint32Value();
+
+  // === Populate bets
+
+  v8::Handle<v8::Array> bets = v8::Array::New(5);
+  bets->Set(0, betToJson("Nav", "smallBlind", 5.0));
+  bets->Set(1, betToJson("Joseph", "bigBlind", 10.0));
+  bets->Set(2, betToJson("Nav", "call", 10.0));
+  bets->Set(3, checkpointToJson("flop"));
+  bets->Set(4, betToJson("Nav", "raiseTo", 10.0));
+ 
+  // === Populate chipCounts
+
+  v8::Handle<v8::Object> chipCounts = v8::Object::New();
+  chipCounts->Set(v8::String::NewSymbol("Nav"), v8::Number::New(500.0));
+  chipCounts->Set(v8::String::NewSymbol("Joseph"), v8::Number::New(450.0));
+ 
+ 
+  // === Populate community
+
+  v8::Handle<v8::Array> community = v8::Array::New(3);
+  community->Set(0, v8::String::New("2h"));
+  community->Set(1, v8::String::New("Th"));
+  community->Set(2, v8::String::New("2c"));
+ 
+
+
+  // === Return result
+
+
+  v8::Local<v8::Object> obj = v8::Object::New();
+  obj->Set(v8::String::NewSymbol("pot"), bets);
+  obj->Set(v8::String::NewSymbol("chipCounts"), chipCounts);
+  obj->Set(v8::String::NewSymbol("dealerOn"), v8::String::New("Nav"));
+  obj->Set(v8::String::NewSymbol("community"), community);
+
+  return scope.Close(obj);
+
 }
 
 // This creates the prototype/global/static (e.g. pokerai.exports.startTable())
@@ -274,6 +385,33 @@ void Init(v8::Handle<v8::Object> exports) {
 */
   exports->Set(v8::String::NewSymbol("shutdownTable"),
      v8::FunctionTemplate::New(ShutdownTable)->GetFunction());
+
+ 
+/*
+  pokerai.exports.getActionSituation({ 'id': <onDiskId>, '_instance': <instanceHandle> }, handNum)
+  JSON Response:
+  {
+    'bets': [
+            {'id': 'Nav', 'action': 'smallBlind', 'amount': 5.0},
+            {'id': 'Joseph', 'action': 'bigBlind', 'amount': 10.0},
+            {'id': 'bot1', 'action': 'fold', 'amount': -1},
+            {'id': 'bot2', 'action': 'raiseTo', 'amount': 25.0},
+            {'id': 'bot3', 'action': 'call', 'amount': 25.0},
+            ...
+            {'checkpoint': 'flop'},
+            {'id': 'Nav', 'action': 'check', 'amount': 0.0}
+           ],
+    'chipCounts': {
+            'id1': 500.0,
+            ...
+            }
+    'dealerOn': <playerId>
+    'community': ['Kh', 'Ts', '9h'],
+  }
+*/
+  exports->Set(v8::String::NewSymbol("getActionSituation"),
+     v8::FunctionTemplate::New(GetActionSituation)->GetFunction());
+
 }
 
 // Our target is named "pokerai". See binding.gyp for more
