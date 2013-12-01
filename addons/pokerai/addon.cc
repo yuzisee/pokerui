@@ -171,7 +171,7 @@ private:
 
 };
 
-struct PokerAiBetResult {
+struct PokerAiMakeBet {
   bool bSuccess; // true if no errors
   playernumber_t fHighbetIdx; // This is the last player to raise.
   std::string fHighbetIdent;
@@ -185,7 +185,7 @@ struct PokerAiBetResult {
   // If 'C' all betting rounds have concluded and we're at the showdown.
   char bHandEnded;
 
-  PokerAiBetResult() :
+  MakeBet(playernumber_t seatNum, HoldemArena &fTable, PokerAiRoundSetup &fTableRound, double amount) :
   bSuccess(false)
   ,
   fHighbetIdx(-1)
@@ -197,7 +197,79 @@ struct PokerAiBetResult {
   bRoundEnded(false)
   ,
   bHandEnded('\0')
-  {}
+  {
+    // NOTE ABOUT EARLY RETURNS: bSuccess is false by default.
+
+    if (!fTableRound.fB) {
+      // error
+      return;
+    }
+
+    if (seatNum != fTableRound.fB->WhoIsNext()) {
+      // error
+      return;
+    }
+
+    // === Make the bet ===
+    HoldemAction action(fTableRound.fB->MakeBet(amount, &result.minRaiseMsg));
+    const char newState = fTableRound.fB->bBetState;
+    const playernumber_t highbet;
+    result.fHighbetIdx = highbet;
+    result.fHighbetIdent = fTable.ViewPlayer(highbet)->GetIdent();
+
+    if (result.minRaiseMsg.result != result.minRaiseMsg.result) {
+      // NaN msg, so our bet was untouched.
+      result.adjustedRaiseTo = amount;
+    } else {
+      result.adjustedRaiseTo = result.minRaiseMsg.result;
+    }
+
+    // Epilog
+    switch(newState) {
+      case 'b':
+        // More betting is taking place.
+        result.bSuccess = true;
+        return;
+      case 'C':
+        // The round is done. Go on to the next round.
+
+        if (highbet == -1) {
+          // INCONSISTENT RESULT!
+          return;
+        }
+        
+        if (fTableRound.hasNextBettingRound()) {
+          fTableRound.startNextBettingRound();
+          result.bSuccess = true;
+          result.bRoundDone = true;
+          return;
+        } else {
+          // All betting rounds complete.
+
+          fTableRound.clear();
+          result.bSuccess = true;
+          result.bRoundDone = true;
+          result.bHandDone = newState;
+          return;
+        }
+      case 'F':
+        // The hand is done. Go on to the next hand.
+
+        if (highbet != -1) {
+          // INCONSISTENT RESULT!
+          return;
+        }
+
+        fTableRound.clear();
+        result.bSuccess = true;
+        result.bRoundDone = true;
+        result.bHandDone = newState;
+        return;
+      default:
+        // error unknown state
+        return;
+
+  }
 }
 
 class PokerAiInstance {
@@ -259,78 +331,24 @@ public:
   }
 
   // Return true on success, false on error
-  PokerAiBetResult makeBet(playernumber_t seatNum, double amount) {
-    PokerAiBetResult result;
-
-    if (!fTableRound.fB) {
-      // error
-      return result;
-    }
-
-    if (seatNum != fTableRound.fB->WhoIsNext()) {
-      // error
-      return result;
-    }
-
-    // === Make the bet ===
-    HoldemAction action(fTableRound.fB->MakeBet(amount, &result.minRaiseMsg));
-    const char newState = fTableRound.fB->bBetState;
-    const playernumber_t highbet;
-    result.fHighbetIdx = highbet;
-    result.fHighbetIdent = fTable.ViewPlayer(highbet)->GetIdent();
-
-    if (result.minRaiseMsg.result != result.minRaiseMsg.result) {
-      // NaN msg, so our bet was untouched.
-      result.adjustedRaiseTo = amount;
-    } else {
-      result.adjustedRaiseTo = result.minRaiseMsg.result;
-    }
-
-    // Epilog
-    switch(newState) {
-      case 'b':
-        // More betting is taking place.
-        result.bSuccess = true;
-        return result;
-      case 'C':
-        // The round is done. Go on to the next round.
-
-        if (highbet == -1) {
-          // INCONSISTENT RESULT!
-          return result;
-        }
-        
-        if (fTableRound.hasNextBettingRound()) {
-          fTableRound.startNextBettingRound();
-          result.bSuccess = true;
-          result.bRoundDone = true;
-          return result;
-        } else {
-          // All betting rounds complete.
-
-          fTableRound.clear();
-          result.bSuccess = true;
-          result.bRoundDone = true;
-          result.bHandDone = newState;
-          return result;
-        }
-      case 'F':
-        // The hand is done. Go on to the next hand.
-
-        if (highbet != -1) {
-          // INCONSISTENT RESULT!
-          return false;
-        }
-
-        fTableRound.clear();
-        result.bSuccess = true;
-        result.bRoundDone = true;
-        result.bHandDone = newState;
-        return result;
-      default:
-        // unknown state
-        return result;
+  PokerAiMakeBet makeBet(playernumber_t seatNum, double amount) {
+    PokerAiMakeBet result(seatNum, fTable, fTableRound, amount);
+    return result;
   }
+
+  // returns 0 on error
+  const DeckLocationPair * holeCards(playernumber_t seatNum) const {
+    if(seatNum > fTable.NumberAtTable()) {
+      return 0;
+    }
+
+    if (!fTableRound->fDealtHolecards) {
+      return 0;
+    }
+
+    return &(fTableRound->fDealtHolecards[seatNum]);
+  }
+  
 
 private:
   const std::string fOnDiskId;
@@ -636,10 +654,11 @@ v8::Handle<v8::Value> GetStatus(const v8::Arguments& args) {
 
 // Create a JSON object of the form:
 //  {'id': 'Nav', 'action': 'raiseTo', 'amount': 5.0}
-static v8::Local<v8::Object> betToJson(const char * const id, const char * const action, double amount) {
+static v8::Local<v8::Object> betToJson(const char * const id, const playernumber_t seatNum, const char * const action, double amount) {
   v8::Local<v8::Object> obj = v8::Object::New();
-  obj->Set(v8::String::NewSymbol("id"), v8::String::New(id));
-  obj->Set(v8::String::NewSymbol("action"), v8::String::New(action));
+  obj->Set(v8::String::NewSymbol("_playerId"), v8::String::New(id));
+  obj->Set(v8::String::NewSymbol("_seatNumber"), v8::Uint32t::New(seatNum));
+  obj->Set(v8::String::NewSymbol("_action"), v8::String::New(action));
   obj->Set(v8::String::NewSymbol("amount"), v8::Number::New(amount));
   return obj;
 }
@@ -801,7 +820,9 @@ v8::Handle<v8::Value> GetOutcome(const v8::Arguments& args) {
 }
 
 static std::string toString(const DeckLocation &d) {
-  HoldemUtil::PrintCard(fGameLog, 
+  std::ostringstream s;
+  HoldemUtil::PrintCard(s, d);
+  return s.str();
 }
 
 
@@ -831,23 +852,27 @@ v8::Handle<v8::Value> GetHoleCards(const v8::Arguments& args) {
 
   const uint32_t seatNumber = args[1]->Uint32Value();
 
-  if (seatNumber >= SEATS_AT_TABLE) {
-    return scope.Close(v8::Undefined());
-  }
 
   // === Populate holeCards
 
+  const DeckLocationPair * const holeCards = table->holeCards(seatNumber);
+
+  if (!holeCards) {
+    return scope.Close(v8::Undefined());
+  }
+
   v8::Local<v8::Array> cards = v8::Array::New(2);
-  cards->Set(0, v8::String::New("Th"));
-  cards->Set(1, v8::String::New("9s"));
+  cards->Set(0, v8::String::New(toString(holeCards.a).c_str()));
+  cards->Set(1, v8::String::New(toString(holeCards.b).c_str()));
 
  
   // === Return result
 
 
   v8::Local<v8::Object> obj = v8::Object::New();
-  obj->Set(v8::String::NewSymbol("cards"), cards);
   obj->Set(v8::String::NewSymbol("_playerId"), v8::String::New("Nav"));
+  obj->Set(v8::String::NewSymbol("_seatNumber"), v8::Uint32t::New(seatNumber));
+  obj->Set(v8::String::NewSymbol("holeCards"), cards);
 
   return scope.Close(obj);
 
@@ -968,17 +993,17 @@ void Init(v8::Handle<v8::Object> exports) {
   JSON Response:
   {
     'bets': [
-            {'id': 'Nav', 'action': 'smallBlind', 'amount': 5.0},
-            {'id': 'Joseph', 'action': 'bigBlind', 'amount': 10.0},
-            {'id': 'bot1', 'action': 'fold', 'amount': -1},
-            {'id': 'bot2', 'action': 'raiseTo', 'amount': 25.0},
-            {'id': 'bot3', 'action': 'call', 'amount': 25.0},
+            {'_playerId': 'Nav', '_seatNumber': 0, '_action': 'smallBlind', 'amount': 5.0},
+            {'_playerId': 'Joseph', '_seatNumber': 0, '_action': 'bigBlind', 'amount': 10.0},
+            {'_playerId': 'bot1', '_seatNumber': 0, '_action': 'fold', 'amount': -1},
+            {'_playerId': 'bot2', '_seatNumber': 0, '_action': 'raiseTo', 'amount': 25.0},
+            {'_playerId': 'bot3', '_seatNumber': 0, '_action': 'call', 'amount': 25.0},
             ...
             {'checkpoint': 'flop'},
-            {'id': 'Nav', 'action': 'check', 'amount': 0.0}
+            {'_playerId': 'Nav', '_seatNumber': 0, '_action': 'check', 'amount': 0.0}
            ],
     'chipCounts': {
-            'id1': 500.0,
+            'bot2': 500.0,
             ...
             }
     'dealerOn': <playerId>
@@ -1015,7 +1040,7 @@ void Init(v8::Handle<v8::Object> exports) {
 
 
 /*
-  pokerai.exports.performAction({ 'id': <onDiskId>, '_instance': <instanceHandle> }, {'_playerId': 'Joseph', '_seatNumber': 2, 'action': 'call', 'amount': 10.0})
+  pokerai.exports.performAction({ 'id': <onDiskId>, '_instance': <instanceHandle> }, {'_playerId': 'Joseph', '_seatNumber': 2, '_action': 'call', 'amount': 10.0})
 */
   exports->Set(v8::String::NewSymbol("performAction"),
      v8::FunctionTemplate::New(PerformAction)->GetFunction());
