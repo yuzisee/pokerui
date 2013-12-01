@@ -14,6 +14,8 @@ console.log(outcome1['handsRevealed']['Nav']['cards']);
 
 console.log(addon.getHoleCards(obj1, 1));
 
+addon.performAction(obj1, {'_playerId': 'Joseph', '_action': 'raiseTo', 'amount': 50.0});
+
 var rsp1 = addon.shutdownTable(obj1);
 
 console.log(rsp1);

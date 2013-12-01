@@ -31,6 +31,9 @@ class Test {
       ++fHandNum;
     }
 
+    void MakeBet(double amount) {
+    }
+
   private:
     //const double fA;
     const std::string fOnDiskId;
@@ -65,7 +68,7 @@ static v8::Handle<v8::Array> marshallPtr(const Test * const test) {
 }
 
 // Return 0 on error
-static const Test * unmarshallPtr(const v8::Handle<v8::Array> &v8LittleEndianPtr)
+static Test * unmarshallPtr(const v8::Handle<v8::Array> &v8LittleEndianPtr)
 {
   uintptr_t instance = 0; // 4 bytes: 0xffffffff mask
   for(size_t k=v8LittleEndianPtr->Length(); k > 0; --k) {
@@ -79,7 +82,7 @@ static const Test * unmarshallPtr(const v8::Handle<v8::Array> &v8LittleEndianPtr
     instance |= i;
   }
 
-  const Test * const test = reinterpret_cast<const Test * const>(instance);
+  Test * const test = reinterpret_cast<Test * const>(instance);
 
   printf("unmarshallPtr = %p\n", test);
 
@@ -88,7 +91,7 @@ static const Test * unmarshallPtr(const v8::Handle<v8::Array> &v8LittleEndianPtr
 
 // Read args[0] and interpret as a ``Test *`` handle
 // Returns 0 on error
-static const Test * readFirstArgumentAsTable(const v8::Arguments& args) {
+static Test * readFirstArgumentAsTable(const v8::Arguments& args) {
 
   // === Validate arguments
 
@@ -121,7 +124,7 @@ static const Test * readFirstArgumentAsTable(const v8::Arguments& args) {
 
   // === Unmarshall/unserialize table instance pointer
 
-  const Test * const test = unmarshallPtr(v8LittleEndianPtr);
+  Test * const test = unmarshallPtr(v8LittleEndianPtr);
 
   // === Health check!
 
@@ -521,6 +524,63 @@ v8::Handle<v8::Value> GetHoleCards(const v8::Arguments& args) {
 }
 
 
+v8::Handle<v8::Value> PerformAction(const v8::Arguments& args) {
+  v8::HandleScope scope;
+
+  // === Validate arguments
+
+  if (args.Length() != 2) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Wrong number of arguments")));
+    return scope.Close(v8::Undefined());
+  }
+
+  if (!args[1]->IsObject()) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Second argument must be a Javascript object")));
+    return scope.Close(v8::Undefined());
+  }
+
+  // === Read arguments
+
+  v8::Local<v8::Object> arg1 = args[1]->ToObject();
+
+  if (arg1->Get(v8::String::NewSymbol("_playerId"))->IsString()) {
+    // Extra sanity check that the player ID is correct.
+  }
+
+  if (arg1->Get(v8::String::NewSymbol("action"))->IsString()) {
+    // Extra sanity check on your action?
+  }
+
+  if (!arg1->Get(v8::String::NewSymbol("amount"))->IsNumber()) {
+    // Extra sanity check on your action?
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Second argument must contain .amount")));
+    return scope.Close(v8::Undefined());
+  }
+
+  double amount = arg1->Get(v8::String::NewSymbol("amount"))->NumberValue();
+
+
+  Test * const test = readFirstArgumentAsTable(args);
+
+  if (!test) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("First argument must be a object containg .id (must be a string and must match the onDiskId provided to startTable) and ._instance (must be an array of uint32 values)")));
+    return scope.Close(v8::Undefined());
+  }
+
+  // === Apply the action
+
+  test->MakeBet(amount);
+
+  // === No return value
+
+  return scope.Close(v8::Undefined());
+
+}
+
+
+
+
+
 
 
 
@@ -614,6 +674,14 @@ void Init(v8::Handle<v8::Object> exports) {
 */
   exports->Set(v8::String::NewSymbol("getHoleCards"),
      v8::FunctionTemplate::New(GetHoleCards)->GetFunction());
+
+
+/*
+  pokerai.exports.performAction({ 'id': <onDiskId>, '_instance': <instanceHandle> }, {'_playerId': 'Joseph', 'action': 'call', 'amount': 10.0})
+*/
+  exports->Set(v8::String::NewSymbol("performAction"),
+     v8::FunctionTemplate::New(PerformAction)->GetFunction());
+
 
 }
 
