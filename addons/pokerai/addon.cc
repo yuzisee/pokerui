@@ -6,46 +6,100 @@
 #include <vector>
 #include <cstdio>
 
-// TODO(from yuzisee): Replace with actual holdem engine
-class Test {
-  public:
-    Test(const std::string &onDiskId, double startingChips)
-    :
-    //fA(startingChips)
-    //,
-    fOnDiskId(onDiskId)
-    ,
-    fHandNum(0)
-    {}
-    ~Test() {}
+#include "holdem/src/arena.h"
 
-    const std::string &onDiskId() const {
-        return fOnDiskId;
+static const double CHIP_DENOM = 0.01; // Minimum bet denomination
+
+class PokerAiInstance {
+
+public:
+  PokerAiInstance(std::string &cOnDiskId, double startingChips)
+  :
+  fOnDiskId(cOnDiskId)
+  ,
+  fGamelog(new std::ofstream(cOnDiskId.c_str(), std::ios_base::app))
+  ,
+  fTable(CHIP_DENOM, *fGamelog, true, true)
+  ,
+  fHandNum(0)
+  ,
+  fB(reinterpret_cast<void *>(0))
+  ,
+  fComSize(0)
+  {}
+
+  ~PokerAiInstance() {
+    if (b) {
+      delete b;
     }
 
-    int handNum() const {
-      return fHandNum;
+    fGamelog->close();
+    delete fGamelog;
+  }
+
+  void startNewHand() {
+    ++handNum;
+
+    struct BlindValues bl;
+    bl.SetSmallBigBlind(5.0);
+
+    myTable.BeginInitialState(handNum);
+    myTable.BeginNewHands(bl, false);
+
+    //Preflop
+    // true: first betting round of the hand
+    // 3: flop, turn, river remaining
+    PrepBettingRound(true,3);  
+
+    fCommunity.SetEmpty();
+    fComSize = 0;
+
+    b = new HoldemArenaBetting(&fTable, fCommunity, fComSize);
+  }
+
+  handnum_t handNum() const {
+    return fHandNum;
+  }
+
+  // Returns empty string on error
+  std::string actionOn() const {
+    if (!b) {
+      // error
+      return "";
     }
 
-    void incrHandNum() {
-      ++fHandNum;
+    const playernumber_t curIndex = b->WhoIsNext();
+
+    if (curIndex < 0) {
+      return "";
     }
 
-    void MakeBet(double amount) {
+    if (curIndex >= SEATS_AT_TABLE) {
+      return "";
     }
 
-  private:
-    //const double fA;
-    const std::string fOnDiskId;
-    int fHandNum;
-};
+    return fTable.ViewPlayer(curIndex)->GetIdent();
+  }
+
+private:
+  const std::string fOnDiskId;
+  std::ofstream * const fGamelog;
+  HoldemArena fTable;
+  handnum_t fHandNum;
+  HoldemArenaBetting * fB;
+
+  CommunityPlus fCommunity;
+  int8 fComSize;
+
+}
+;
 
 // Returns v8LittleEndianPtr.IsEmpty() on error.
-static v8::Handle<v8::Array> marshallPtr(const Test * const test) {
+static v8::Handle<v8::Array> marshallPtr(const PokerAiInstance * const table) {
 
-  printf("marshallPtr(%p)\n", test);
+  printf("marshallPtr(%p)\n", table);
 
-  const uintptr_t instance = reinterpret_cast<uintptr_t>(test);
+  const uintptr_t instance = reinterpret_cast<uintptr_t>(table);
 
   std::vector<uint32_t> cLittleEndianPtr; // 4 bytes: 0xffffffff mask
   uintptr_t i = instance;
@@ -68,7 +122,7 @@ static v8::Handle<v8::Array> marshallPtr(const Test * const test) {
 }
 
 // Return 0 on error
-static Test * unmarshallPtr(const v8::Handle<v8::Array> &v8LittleEndianPtr)
+static PokerAiInstance * unmarshallPtr(const v8::Handle<v8::Array> &v8LittleEndianPtr)
 {
   uintptr_t instance = 0; // 4 bytes: 0xffffffff mask
   for(size_t k=v8LittleEndianPtr->Length(); k > 0; --k) {
@@ -82,16 +136,16 @@ static Test * unmarshallPtr(const v8::Handle<v8::Array> &v8LittleEndianPtr)
     instance |= i;
   }
 
-  Test * const test = reinterpret_cast<Test * const>(instance);
+  PokerAiInstance * const table = reinterpret_cast<PokerAiInstance * const>(instance);
 
-  printf("unmarshallPtr = %p\n", test);
+  printf("unmarshallPtr = %p\n", table);
 
-  return test;
+  return table;
 }
 
-// Read args[0] and interpret as a ``Test *`` handle
+// Read args[0] and interpret as a ``PokerAiInstance *`` handle
 // Returns 0 on error
-static Test * readFirstArgumentAsTable(const v8::Arguments& args) {
+static PokerAiInstance * readFirstArgumentAsTable(const v8::Arguments& args) {
 
   // === Validate arguments
 
@@ -124,18 +178,18 @@ static Test * readFirstArgumentAsTable(const v8::Arguments& args) {
 
   // === Unmarshall/unserialize table instance pointer
 
-  Test * const test = unmarshallPtr(v8LittleEndianPtr);
+  PokerAiInstance * const table = unmarshallPtr(v8LittleEndianPtr);
 
   // === Health check!
 
-  if (!(cOnDiskId == test->onDiskId())) {
+  if (!(cOnDiskId == table->fOnDiskId)) {
     return 0;
   }
 
 
   // === Return result
 
-  return test;
+  return table;
 
 }
 
@@ -180,13 +234,22 @@ v8::Handle<v8::Value> StartTable(const v8::Arguments& args) {
   double startingChips = args[1]->NumberValue();
 
 
+
+  // === Construct table
+
+  const PokerAiInstance * const table = new PokerAiInstance(cOnDiskId, startingChips);
+
+  // === Initialize seats & players
+
   for(size_t k=0; k<seats->Length(); ++k) {
 
 
     if (seats->Get(k)->IsNull() || seats->Get(k)->IsUndefined()) {
 
-      // Don't fill this seat!
-      printf("Seat %lu left empty.\n", k); 
+      v8::ThrowException(v8::Exception::TypeError(v8::String::New("TODO we don't allow gaps in the seats for now...")));
+      return scope.Close(v8::Undefined());
+      // Don't fill this seat?
+      //printf("Seat %lu left empty.\n", k); 
 
     } else {
       if (seats->Get(k)->IsObject()) {
@@ -200,7 +263,19 @@ v8::Handle<v8::Value> StartTable(const v8::Arguments& args) {
           v8::String::Utf8Value v8PlayerIdent( argPlayerIdent->ToString() );
           std::string cPlayerIdent(*v8PlayerIdent);
 
+          if (cPlayerIdent.size() == 0) {
+            v8::ThrowException(v8::Exception::TypeError(v8::String::New("Player .id canot be blank.")));
+            return scope.Close(v8::Undefined());
+          }
+
           bool cBot = argBot->BooleanValue();
+
+          if (cBot) {
+            v8::ThrowException(v8::Exception::TypeError(v8::String::New("TODO table->AddStrategyBot(cPlayerIdent.c_str(), startingChips, 'R');")));
+            return scope.Close(v8::Undefined());
+          } else {
+            table->AddHumanOpponent(cPlayerIdent.c_str(), startingChips);
+          }
 
           printf("Seat %lu requested! ident=%s bot=%d\n", k, cPlayerIdent.c_str(), cBot); 
 
@@ -216,16 +291,10 @@ v8::Handle<v8::Value> StartTable(const v8::Arguments& args) {
 
 
   }
-
-
-  // === Construct table
-
-  const Test * const test = new Test(cOnDiskId, startingChips);
-
   // === Marshall/serialize table instance pointer
  
-  v8::Handle<v8::Array> v8LittleEndianPtr = marshallPtr(test);
-  const Test * const verify = unmarshallPtr(v8LittleEndianPtr);
+  v8::Handle<v8::Array> v8LittleEndianPtr = marshallPtr(table);
+  const PokerAiInstance * const verify = unmarshallPtr(v8LittleEndianPtr);
 
   // Couldn't create the array...
   if (v8LittleEndianPtr.IsEmpty()) {
@@ -234,10 +303,14 @@ v8::Handle<v8::Value> StartTable(const v8::Arguments& args) {
   }
 
 
-  if (verify != test) {
-    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Self-test failed.")));
+  if (verify != table) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Self-table failed.")));
     return scope.Close(v8::Undefined());
   }
+
+  // === Start the first hand (AUTOMATIC)
+
+  table->startFirstHand();
 
   // === Return result
 
@@ -260,9 +333,9 @@ v8::Handle<v8::Value> ShutdownTable(const v8::Arguments& args) {
 
   // === Read arguments
 
-  const Test * const test = readFirstArgumentAsTable(args);
+  const PokerAiInstance * const table = readFirstArgumentAsTable(args);
 
-  if (!test) {
+  if (!table) {
     v8::ThrowException(v8::Exception::TypeError(v8::String::New("First argument must be a object containg .id (must be a string) and ._instance (must be an array of uint32 values)")));
     return scope.Close(v8::Undefined());
   }
@@ -271,12 +344,41 @@ v8::Handle<v8::Value> ShutdownTable(const v8::Arguments& args) {
 
   // === Destruct table
 
-  delete test;
+  delete table;
 
   // === Return result
 
   v8::Local<v8::Object> obj = v8::Object::New();
   obj->Set(v8::String::NewSymbol("success"), v8::Boolean::New(true));
+
+  return scope.Close(obj);
+}
+
+
+v8::Handle<v8::Value> GetStatus(const v8::Arguments& args) {
+  v8::HandleScope scope;
+
+  // === Validate arguments
+
+  if (args.Length() != 1) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Wrong number of arguments")));
+    return scope.Close(v8::Undefined());
+  }
+
+  // === Read arguments
+
+  const PokerAiInstance * const table = readFirstArgumentAsTable(args);
+
+  if (!table) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("First argument must be a object containg .id (must be a string) and ._instance (must be an array of uint32 values)")));
+    return scope.Close(v8::Undefined());
+  }
+
+  // === Return result
+
+  v8::Local<v8::Object> obj = v8::Object::New();
+  obj->Set(v8::String::NewSymbol("currentHand"), v8::Uint32::New(table->handNum()));
+  obj->Set(v8::String::NewSymbol("actionOn"), v8::String::New(table->actionOn()));
 
   return scope.Close(obj);
 }
@@ -317,9 +419,9 @@ v8::Handle<v8::Value> GetActionSituation(const v8::Arguments& args) {
 
   // === Read arguments
 
-  const Test * const test = readFirstArgumentAsTable(args);
+  const PokerAiInstance * const table = readFirstArgumentAsTable(args);
 
-  if (!test) {
+  if (!table) {
     v8::ThrowException(v8::Exception::TypeError(v8::String::New("First argument must be a object containg .id (must be a string and must match the onDiskId provided to startTable) and ._instance (must be an array of uint32 values)")));
     return scope.Close(v8::Undefined());
   }
@@ -370,33 +472,6 @@ v8::Handle<v8::Value> GetActionSituation(const v8::Arguments& args) {
 }
 
 
-v8::Handle<v8::Value> GetStatus(const v8::Arguments& args) {
-  v8::HandleScope scope;
-
-  // === Validate arguments
-
-  if (args.Length() != 1) {
-    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Wrong number of arguments")));
-    return scope.Close(v8::Undefined());
-  }
-
-  // === Read arguments
-
-  const Test * const test = readFirstArgumentAsTable(args);
-
-  if (!test) {
-    v8::ThrowException(v8::Exception::TypeError(v8::String::New("First argument must be a object containg .id (must be a string) and ._instance (must be an array of uint32 values)")));
-    return scope.Close(v8::Undefined());
-  }
-
-  // === Return result
-
-  v8::Local<v8::Object> obj = v8::Object::New();
-  obj->Set(v8::String::NewSymbol("currentHand"), v8::Uint32::New(4));
-  obj->Set(v8::String::NewSymbol("actionOn"), v8::String::New("Joseph"));
-
-  return scope.Close(obj);
-}
 
 // Create a JSON object of the form:
 // {'cards', ['9s', 'Th'], 'outcome': 'Full House: Nines over Tens'}
@@ -443,9 +518,9 @@ v8::Handle<v8::Value> GetOutcome(const v8::Arguments& args) {
 
   // === Read arguments
 
-  const Test * const test = readFirstArgumentAsTable(args);
+  const PokerAiInstance * const table = readFirstArgumentAsTable(args);
 
-  if (!test) {
+  if (!table) {
     v8::ThrowException(v8::Exception::TypeError(v8::String::New("First argument must be a object containg .id (must be a string and must match the onDiskId provided to startTable) and ._instance (must be an array of uint32 values)")));
     return scope.Close(v8::Undefined());
   }
@@ -492,9 +567,9 @@ v8::Handle<v8::Value> GetHoleCards(const v8::Arguments& args) {
 
   // === Read arguments
 
-  const Test * const test = readFirstArgumentAsTable(args);
+  const PokerAiInstance * const table = readFirstArgumentAsTable(args);
 
-  if (!test) {
+  if (!table) {
     v8::ThrowException(v8::Exception::TypeError(v8::String::New("First argument must be a object containg .id (must be a string and must match the onDiskId provided to startTable) and ._instance (must be an array of uint32 values)")));
     return scope.Close(v8::Undefined());
   }
@@ -560,16 +635,16 @@ v8::Handle<v8::Value> PerformAction(const v8::Arguments& args) {
   double amount = arg1->Get(v8::String::NewSymbol("amount"))->NumberValue();
 
 
-  Test * const test = readFirstArgumentAsTable(args);
+  PokerAiInstance * const table = readFirstArgumentAsTable(args);
 
-  if (!test) {
+  if (!table) {
     v8::ThrowException(v8::Exception::TypeError(v8::String::New("First argument must be a object containg .id (must be a string and must match the onDiskId provided to startTable) and ._instance (must be an array of uint32 values)")));
     return scope.Close(v8::Undefined());
   }
 
   // === Apply the action
 
-  test->MakeBet(amount);
+  table->MakeBet(amount);
 
   // === No return value
 
@@ -592,7 +667,7 @@ void Init(v8::Handle<v8::Object> exports) {
 
   
 /*
-  pokerai.exports.startTable(tableId, 1500, [{'id': 'playerId1', 'bot': false}, {'id': 'playerId2', 'bot': true}, None, None, {'id': 'playerId3', 'bot': false}, ...])
+  pokerai.exports.startTable(tableId, 1500, [{'id': 'playerId1', 'bot': false}, {'id': 'playerId2', 'bot': true}, {'id': 'playerId3', 'bot': false}, null, null, ...])
   JSON Response:
   {
     'id': <onDiskId>
@@ -611,6 +686,18 @@ void Init(v8::Handle<v8::Object> exports) {
 */
   exports->Set(v8::String::NewSymbol("shutdownTable"),
      v8::FunctionTemplate::New(ShutdownTable)->GetFunction());
+
+/*
+  pokerai.exports.getStatus({ 'id': <onDiskId>, '_instance': <instanceHandle> })
+  JSON Response:
+  {
+    'currentHand': 4,
+    'actionOn': <playerId>
+  }
+*/
+  exports->Set(v8::String::NewSymbol("getStatus"),
+     v8::FunctionTemplate::New(GetStatus)->GetFunction());
+
 
  
 /*
@@ -637,18 +724,6 @@ void Init(v8::Handle<v8::Object> exports) {
 */
   exports->Set(v8::String::NewSymbol("getActionSituation"),
      v8::FunctionTemplate::New(GetActionSituation)->GetFunction());
-
-/*
-  pokerai.exports.getStatus({ 'id': <onDiskId>, '_instance': <instanceHandle> })
-  JSON Response:
-  {
-    'currentHand': 4,
-    'actionOn': <playerId>
-  }
-*/
-  exports->Set(v8::String::NewSymbol("getStatus"),
-     v8::FunctionTemplate::New(GetStatus)->GetFunction());
-
  
 /*
   pokerai.exports.getOutcome({ 'id': <onDiskId>, '_instance': <instanceHandle> }, handNum)
