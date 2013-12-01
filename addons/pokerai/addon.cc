@@ -5,10 +5,200 @@
 #include <string>
 #include <vector>
 #include <cstdio>
+#include <limits>
 
 #include "holdem/src/arena.h"
 
 static const double CHIP_DENOM = 0.01; // Minimum bet denomination
+
+
+class PokerAiRoundSetup {
+
+
+public:
+
+  PokerAiRoundSetup() : fDealtHolecards(0), fB(0) {
+    clear();// TODO(from yuzisee): Set random seed?
+  }
+  ~PokerAiRoundSetup() {
+    clear();
+  }
+
+  void clear() {
+    if (fB) {
+      delete fB;
+      fB = 0;
+    }
+
+    fComSize = 0;
+
+    fCommunity.SetEmpty();
+ 
+    if (fDealtHolecards) {
+      delete [] fDealtHolecards;
+      fDealtHolecards = 0;
+    }
+ 
+    fPlayerCount = 0;
+
+  }
+ 
+  // Return false on error
+  bool startNewHand(const handnum_t handnum, HoldemArena& myTable, const BlindValues & blinds) {
+    clear();
+
+    // == Init
+
+    fPlayerCount = myTable.NumberAtTable();
+    fDealtHolecards = new DeckLocationPair[fPlayerCount];
+    if (!fDealtHolecards) {
+      return false;
+    }
+
+    // == Deal cards
+
+    r.ShuffleDeck();
+
+    Hand newCard;
+    for (size_t i=0; i<fPlayerCount; ++i) {
+      newCard.SetEmpty(); r.DealCard(newCard);
+
+      fDealtHolecards[i].a = r->dealtCard;
+
+      newCard.SetEmpty(); r.DealCard(newCard);
+
+      fDealtHolecards[i].b = r->dealtCard;
+    }
+
+    for (size_t i=0; i<5; ++i) {
+      newCard.SetEmpty(); r.DealCard(newCard);
+
+      fDealtCommunity[i] = r->dealtCard;
+    }
+
+    // == Begin the first round
+ 
+    fTable.BeginInitialState(handNum);
+    fTable.BeginNewHands(blinds,false);
+
+    // true: first betting round of the hand
+    // 3: flop, turn, river remaining
+    fTable.PrepBettingRound(true,3);  
+
+
+    return startBettingRound(myTable)
+
+  }
+
+  
+
+private:
+  RandomDeck r;
+  playernumber_t fPlayerCount;
+  DeckLocationPair * fDealtHolecards;
+  DeckLocation fDealtCommunity[5];
+
+  CommunityPlus fCommunity;
+  int8 fComSize;
+  HoldemArenaBetting * fB;
+
+  bool hasNextBettingRound() {
+    if (fComSize == 5) {
+      return false;
+    }
+
+    return true;
+  }
+
+  bool startNextBettingRound(HoldemArena& myTable) {
+    if (!fB) {
+      // Can't find previous betting round!!
+      return false;
+    }
+
+    delete fB;
+    fB = 0;
+
+    switch(fComSize) {
+      case 0:
+        // Finished, pre-flop, start post-flop
+        fComSize = 3;
+
+        myTable.PrepBettingRound(false,2);
+        fCommunity->AddToHand(fDealtCommunity[0]);
+        fCommunity->AddToHand(fDealtCommunity[1]);
+        fCommunity->AddToHand(fDealtCommunity[2]);
+
+        return startBettingRound(myTable);
+      case 3:
+        // Finished flop betting round, show turn and begin turn betting round
+        fComSize = 4;
+
+        myTable.PrepBettingRound(false,1);
+        fCommunity.AddToHand(fDealtCommunity[3]);
+
+        return startBettingRound(myTable);
+      case 4:
+        // Finished turn betting round, show river and begin river betting round
+        fComSize = 5;
+
+        fTable.PrepBettingRound(false,0);
+        fCommunity.AddToHand(fDealtCommunity[4]);
+
+        return startBettingRound(myTable);
+      case 5:
+        // Since hasNextBettingRound() is false, you shouldn't be calling startNextBettingRound() at this time.
+        return false;
+      default:
+        return false;
+    }
+  }
+
+  bool startBettingRound(HoldemArena& myTable) {
+    if (fB) {
+      // Error: fB already exists
+      return false;
+    }
+
+    fB = new HoldemArenaBetting(&myTable, fCommunity, fComSize);
+
+    if (fB) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+};
+
+struct PokerAiBetResult {
+  bool bSuccess; // true if no errors
+  playernumber_t fHighbetIdx; // This is the last player to raise.
+  std::string fHighbetIdent;
+
+  struct MinRaiseError minRaiseMsg;
+  double adjustedRaiseTo; // This is populated to your actual bet. If it doesn't match your intended bet it was because of minRaise rules.
+
+  bool bRoundEnded; // If true, this betting round has concluded
+
+  // If 'F' all betting rounds have concluded due to all-fold.
+  // If 'C' all betting rounds have concluded and we're at the showdown.
+  char bHandEnded;
+
+  PokerAiBetResult() :
+  bSuccess(false)
+  ,
+  fHighbetIdx(-1)
+  ,
+  fHighbetIdent("")
+  ,
+  adjustedRaiseTo(std::numeric_limits<double>::signaling_NaN())
+  ,
+  bRoundEnded(false)
+  ,
+  bHandEnded('\0')
+  {}
+}
 
 class PokerAiInstance {
 
@@ -19,22 +209,17 @@ public:
   ,
   fGamelog(new std::ofstream(cOnDiskId.c_str(), std::ios_base::app))
   ,
-  fTable(CHIP_DENOM, *fGamelog, true, true)
+  fTable(CHIP_DENOM, true, true)
   ,
   fHandNum(0)
-  ,
-  fB(reinterpret_cast<void *>(0))
-  ,
-  fComSize(0)
-  {}
+  {
+  }
 
   ~PokerAiInstance() {
-    if (b) {
-      delete b;
-    }
-
+    
     fGamelog->close();
     delete fGamelog;
+    fGamelog = 0;
   }
 
   bool startNewHand() {
@@ -42,12 +227,9 @@ public:
 
     struct BlindValues bl;
     bl.SetSmallBigBlind(5.0);
-
-    myTable.BeginInitialState(handNum);
-    myTable.BeginNewHands(bl, false);
-
-    return startBettingRound(0);
-    // TODO(from yusizee): Pre-deal all hands and all community cards here and store them in memory.
+    // TODO(from yuzisee): Create a new HoldemArena every time?
+    
+    return fTableRound.startNewHand(handNum, fTable, bl);
   }
 
   handnum_t handNum() const {
@@ -56,18 +238,20 @@ public:
 
   // Returns empty string on error
   std::string actionOn() const {
-    if (!b) {
+    if (!fTableRound.fB) {
       // error
       return "";
     }
 
-    const playernumber_t curIndex = b->WhoIsNext();
+    const playernumber_t curIndex = fTableRound.fB->WhoIsNext();
 
     if (curIndex < 0) {
+      // error
       return "";
     }
 
     if (curIndex >= SEATS_AT_TABLE) {
+      // error
       return "";
     }
 
@@ -75,112 +259,89 @@ public:
   }
 
   // Return true on success, false on error
-  bool makeBet(playernumber_t seatNum, double amount) {
-    if (!b) {
-      return false;
+  PokerAiBetResult makeBet(playernumber_t seatNum, double amount) {
+    PokerAiBetResult result;
+
+    if (!fTableRound.fB) {
+      // error
+      return result;
     }
 
-    if (seatNum != b->WhoIsNext()) {
-      return false;
+    if (seatNum != fTableRound.fB->WhoIsNext()) {
+      // error
+      return result;
     }
 
     // === Make the bet ===
-    b->MakeBet(amount);
+    HoldemAction action(fTableRound.fB->MakeBet(amount, &result.minRaiseMsg));
+    const char newState = fTableRound.fB->bBetState;
+    const playernumber_t highbet;
+    result.fHighbetIdx = highbet;
+    result.fHighbetIdent = fTable.ViewPlayer(highbet)->GetIdent();
+
+    if (result.minRaiseMsg.result != result.minRaiseMsg.result) {
+      // NaN msg, so our bet was untouched.
+      result.adjustedRaiseTo = amount;
+    } else {
+      result.adjustedRaiseTo = result.minRaiseMsg.result;
+    }
 
     // Epilog
-    switch(b->bBetState) {
+    switch(newState) {
       case 'b':
         // More betting is taking place.
-        return true;
+        result.bSuccess = true;
+        return result;
       case 'C':
         // The round is done. Go on to the next round.
 
-        if (retval.seat_number == -1) {
+        if (highbet == -1) {
           // INCONSISTENT RESULT!
-          return false;
+          return result;
         }
-        delete b;       
-        startNextBettingRound();
-        return true;
+        
+        if (fTableRound.hasNextBettingRound()) {
+          fTableRound.startNextBettingRound();
+          result.bSuccess = true;
+          result.bRoundDone = true;
+          return result;
+        } else {
+          // All betting rounds complete.
+
+          fTableRound.clear();
+          result.bSuccess = true;
+          result.bRoundDone = true;
+          result.bHandDone = newState;
+          return result;
+        }
       case 'F':
         // The hand is done. Go on to the next hand.
 
-        if (retval.seat_number != -1) {
+        if (highbet != -1) {
           // INCONSISTENT RESULT!
           return false;
         }
-        delete b;
-        return true;
+
+        fTableRound.clear();
+        result.bSuccess = true;
+        result.bRoundDone = true;
+        result.bHandDone = newState;
+        return result;
       default:
-        return false;
+        // unknown state
+        return result;
   }
 
 private:
   const std::string fOnDiskId;
   std::ofstream * const fGamelog;
-  HoldemArena fTable;
   handnum_t fHandNum;
-  HoldemArenaBetting * fB;
 
-  CommunityPlus fCommunity;
-  int8 fComSize;
+  HoldemArena fTable;
+  PokerAiRoundSetup fTableRound;
+  PokerAiShowdownSetup fTableShowdown;
 
-  bool startNextBettingRound() {
-    switch(fComSize) {
-      case 0:
-        // Finished, pre-flop, start post-flop
-        return startBettingRound(3);
-      case 3:
-        return startBettingRound(4);
-      case 4:
-        return startBettingRound(5);
-      case 5:
-        // TODO(from yuzisee): Go through the entire showdown, store the result, and move on to the next hand.
-        return true;
-      default:
-        return false;
-    }
-  }
 
-  bool startBettingRound(int8 comSize) {
-    fComSize = comSize;
-
-    switch(comSize) {
-      case 0:
-      //Preflop
-      // true: first betting round of the hand
-      // 3: flop, turn, river remaining
-        fTable.PrepBettingRound(true,3);  
-        fCommunity.SetEmpty();
-        break;
-      case 3:
-      //Flop
-        fTable.PrepBettingRound(false,2);
-        fCommunity.AddToHand(fDealtCommunity[0]);
-        fCommunity.AddToHand(fDealtCommunity[1]);
-        fCommunity.AddToHand(fDealtCommunity[2]);
-        break;
-      case 4:
-      // Turn
-        fTable.PrepBettingRound(false,1);
-        fCommunity.AddToHand(fDealtCommunity[3]);
-        break;
-      case 5:
-        fTable.PrepBettingRound(false,0);
-        fCommunity.AddToHand(fDealtCommunity[4]);
-        break;
-      default:
-        return false;
-    }
-
-    b = new HoldemArenaBetting(&fTable, fCommunity, fComSize);
-
-    if (b) {
-      return true;
-    } else {
-      return false;
-    }
-  }
 }
 ;
 
@@ -639,6 +800,10 @@ v8::Handle<v8::Value> GetOutcome(const v8::Arguments& args) {
 
 }
 
+static std::string toString(const DeckLocation &d) {
+  HoldemUtil::PrintCard(fGameLog, 
+}
+
 
 v8::Handle<v8::Value> GetHoleCards(const v8::Arguments& args) {
   v8::HandleScope scope;
@@ -666,7 +831,7 @@ v8::Handle<v8::Value> GetHoleCards(const v8::Arguments& args) {
 
   const uint32_t seatNumber = args[1]->Uint32Value();
 
-  if (seatNumber > 12) {
+  if (seatNumber >= SEATS_AT_TABLE) {
     return scope.Close(v8::Undefined());
   }
 
