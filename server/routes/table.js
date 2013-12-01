@@ -15,7 +15,7 @@ exports.newTable = function(req, res, next){
 };
 
 exports.loadTable = function(req, res, next){
-    var tableId = req.params.tableId;
+    var tableId = req.params.tableid;
 
     if(req.session.lastTableId != tableId){
         console.log("WEIRD! we were last on table " + req.session.lastTableId);

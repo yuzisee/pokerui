@@ -23,6 +23,7 @@ app.use(express.json());
 app.use(express.urlencoded());
 app.use(express.methodOverride());
 app.use(express.cookieParser());
+app.use(express.bodyParser());
 app.use(express.session({secret: '9YUv495s928Nl5vhaha1212'}));
 app.use(app.router);
 app.use(express.static(path.join(__dirname, 'public')));
@@ -36,9 +37,11 @@ if ('development' == app.get('env')) {
 app.get('/', routes.index);
 app.get('/table', table.table);
 app.get('/table/new', table.newTable);
-app.get('/table/:tableId', table.loadTable);
-app.get('/user/name', user.getName);
-app.get('/user/name/:newName', user.setName);
+app.get('/table/:tableid', table.loadTable);
+app.get('/user', user.getAll);
+app.post('/user', user.postAll);
+app.get('/user/:userid', user.getUser);
+app.post('/user/:userid', user.postUser);
 
 http.createServer(app).listen(app.get('port'), function(){
   console.log('Express server listening on port ' + app.get('port'));
