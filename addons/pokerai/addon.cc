@@ -323,6 +323,10 @@ v8::Handle<v8::Value> GetActionSituation(const v8::Arguments& args) {
 
   const uint32_t handNum = args[1]->Uint32Value();
 
+  if (handNum < 0) {
+    return scope.Close(v8::Undefined());
+  }
+
   // === Populate bets
 
   v8::Handle<v8::Array> bets = v8::Array::New(5);
@@ -360,6 +364,37 @@ v8::Handle<v8::Value> GetActionSituation(const v8::Arguments& args) {
   return scope.Close(obj);
 
 }
+
+
+v8::Handle<v8::Value> GetStatus(const v8::Arguments& args) {
+  v8::HandleScope scope;
+
+  // === Validate arguments
+
+  if (args.Length() != 1) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Wrong number of arguments")));
+    return scope.Close(v8::Undefined());
+  }
+
+  // === Read arguments
+
+  const Test * const test = readFirstArgumentAsTable(args);
+
+  if (!test) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("First argument must be a object containg .id (must be a string) and ._instance (must be an array of uint32 values)")));
+    return scope.Close(v8::Undefined());
+  }
+
+  // === Return result
+
+  v8::Local<v8::Object> obj = v8::Object::New();
+  obj->Set(v8::String::NewSymbol("currentHand"), v8::Uint32::New(4));
+  obj->Set(v8::String::NewSymbol("actionOn"), v8::String::New("Nav"));
+
+  return scope.Close(obj);
+}
+
+
 
 // This creates the prototype/global/static (e.g. pokerai.exports.startTable())
 void Init(v8::Handle<v8::Object> exports) {
@@ -412,6 +447,16 @@ void Init(v8::Handle<v8::Object> exports) {
   exports->Set(v8::String::NewSymbol("getActionSituation"),
      v8::FunctionTemplate::New(GetActionSituation)->GetFunction());
 
+/*
+  pokerai.exports.getStatus({ 'id': <onDiskId>, '_instance': <instanceHandle> })
+  JSON Response:
+  {
+    'currentHand': 4,
+    'actionOn': <playerId>
+  }
+*/
+  exports->Set(v8::String::NewSymbol("getStatus"),
+     v8::FunctionTemplate::New(GetStatus)->GetFunction());
 }
 
 // Our target is named "pokerai". See binding.gyp for more

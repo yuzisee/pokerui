@@ -4,6 +4,7 @@ var obj1 = addon.startTable('MYTABLE', 1500, [{'id': 'Nav', 'bot': false}, null,
 console.log(obj1);
 
 console.log(addon.getActionSituation(obj1, 0));
+console.log(addon.getStatus(obj1));
 
 var rsp1 = addon.shutdownTable(obj1);
 
