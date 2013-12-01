@@ -1,5 +1,13 @@
 var path = require('path');
 
+exports.table = function(req, res, next){
+    if(req.session.lastTableId) {
+        res.redirect('/table/'+req.session.lastTableId);
+    } else {
+        exports.newTable(req, res, next);
+    }
+};
+
 exports.newTable = function(req, res, next){
 		tableId = randomStr(5);
         req.session.lastTableId = tableId;
@@ -8,7 +16,7 @@ exports.newTable = function(req, res, next){
 
 exports.loadTable = function(req, res, next){
     var tableId = req.params.tableId;
-    
+
     if(req.session.lastTableId != tableId){
         console.log("WEIRD! we were last on table " + req.session.lastTableId);
     }

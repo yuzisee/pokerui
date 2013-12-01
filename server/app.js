@@ -34,7 +34,8 @@ if ('development' == app.get('env')) {
 }
 
 app.get('/', routes.index);
-app.get('/table', table.newTable);
+app.get('/table', table.table);
+app.get('/table/new', table.newTable);
 app.get('/table/:tableId', table.loadTable);
 app.get('/user/name', user.getName);
 app.get('/user/name/:newName', user.setName);
