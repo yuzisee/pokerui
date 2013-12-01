@@ -20,6 +20,6 @@ void Init(v8::Handle<v8::Object> exports) {
   // TODO(from yuzisee): What thread does this run on? The javascript thread?
 }
 
-
-NODE_MODULE(addon, Init)
+// Our target is named "pokerai". See binding.gyp for more
+NODE_MODULE(pokerai, Init)
 

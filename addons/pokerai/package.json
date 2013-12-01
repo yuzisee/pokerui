@@ -1,8 +1,9 @@
 {
-  "name": "object_factory",
-  "version": "0.0.0",
-  "description": "Node.js Addons Example #4",
+  "name": "pokerai_addon",
+  "version": "0.0.1",
+  "description": "Node.js Addon for interacting with pokerai tables",
   "main": "addon.js",
   "private": true,
   "gypfile": true
 }
+
