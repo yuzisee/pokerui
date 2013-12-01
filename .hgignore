@@ -1,0 +1,10 @@
+# === GLOBS ===
+syntax: glob
+
+*.swp
+
+# === REGEX ===
+syntax: regexp
+
+^addons/pokerai/build/
+
