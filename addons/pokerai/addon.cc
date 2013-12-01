@@ -10,8 +10,8 @@ class Test {
   public:
     Test(std::string onDiskId, double startingChips)
     :
-    fA(startingChips)
-    ,
+    //fA(startingChips)
+    //,
     fOnDiskId(onDiskId)
     {}
     ~Test() {}
@@ -21,8 +21,8 @@ class Test {
     }
 
   private:
-    const double fA;
-    const std::string fOnDiskId; 
+    //const double fA;
+    const std::string fOnDiskId;
 };
 
 // Returns v8LittleEndianPtr.IsEmpty() on error.
@@ -53,12 +53,12 @@ static v8::Handle<v8::Array> marshallPtr(const Test * const test) {
 }
 
 // Return 0 on error
-static const Test * const unmarshallPtr(v8::Handle<v8::Array> v8LittleEndianPtr)
+static const Test * unmarshallPtr(v8::Handle<v8::Array> v8LittleEndianPtr)
 {
   uintptr_t instance = 0; // 4 bytes: 0xffffffff mask
   for(size_t k=v8LittleEndianPtr->Length(); k > 0; --k) {
 
-    if (!v8LittleEndianPtr->Get(0)->IsUint32()) {
+    if (!v8LittleEndianPtr->Get(k-1)->IsUint32()) {
       return 0;
     }
 
@@ -82,7 +82,7 @@ v8::Handle<v8::Value> StartTable(const v8::Arguments& args) {
 
   // === Validate arguments
   
-  if (args.Length() != 2) {
+  if (args.Length() != 3) {
     v8::ThrowException(v8::Exception::TypeError(v8::String::New("Wrong number of arguments")));
     return scope.Close(v8::Undefined());
   }
@@ -97,6 +97,13 @@ v8::Handle<v8::Value> StartTable(const v8::Arguments& args) {
     return scope.Close(v8::Undefined());
   }
 
+  if (!args[2]->IsArray()) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Third argument must be an array of seats")));
+    return scope.Close(v8::Undefined());
+  }
+
+  v8::Handle<v8::Array> seats = v8::Handle<v8::Array>::Cast( args[2]->ToObject() );
+
   // === Read arguments
 
   v8::Local<v8::String> argOnDiskId = args[0]->ToString();
@@ -105,6 +112,44 @@ v8::Handle<v8::Value> StartTable(const v8::Arguments& args) {
   std::string cOnDiskId(*v8OnDiskId);
 
   double startingChips = args[1]->NumberValue();
+
+
+  for(size_t k=0; k<seats->Length(); ++k) {
+
+
+    if (seats->Get(k)->IsNull() || seats->Get(k)->IsUndefined()) {
+
+      // Don't fill this seat!
+      printf("Seat %lu left empty.\n", k); 
+
+    } else {
+      if (seats->Get(k)->IsObject()) {
+
+        v8::Local<v8::Object> filledSeat = seats->Get(k)->ToObject();
+        v8::Local<v8::Value> argPlayerIdent = filledSeat->Get(v8::String::NewSymbol("id"));
+        v8::Local<v8::Value> argBot = filledSeat->Get(v8::String::NewSymbol("bot"));
+
+        if (argPlayerIdent->IsString() && argBot->IsBoolean()) {
+
+          v8::String::Utf8Value v8PlayerIdent( argPlayerIdent->ToString() );
+          std::string cPlayerIdent(*v8PlayerIdent);
+
+          bool cBot = argBot->BooleanValue();
+
+          printf("Seat %lu requested! ident=%s bot=%d\n", k, cPlayerIdent.c_str(), cBot); 
+
+        } else {
+          v8::ThrowException(v8::Exception::TypeError(v8::String::New("Filled seats must specify .id and .bot")));
+          return scope.Close(v8::Undefined());
+        }
+      } else {
+        v8::ThrowException(v8::Exception::TypeError(v8::String::New("Each seat must be null, undefined, or a valid Object containing .bot and .playerId")));
+        return scope.Close(v8::Undefined());
+      }
+    }
+
+
+  }
 
 
   // === Construct table
@@ -210,7 +255,7 @@ void Init(v8::Handle<v8::Object> exports) {
 
   
 /*
-  pokerai.exports.startTable('tableId', 1500) // TODO ['playerId1,', 'playerId2', None, None, 'playerId3', ...]
+  pokerai.exports.startTable(tableId, 1500, [{'id': 'playerId1', 'bot': false}, {'id': 'playerId2', 'bot': true}, None, None, {'id': 'playerId3', 'bot': false}, ...])
   JSON Response:
   {
     'id': <onDiskId>
