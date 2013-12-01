@@ -6,6 +6,7 @@
 var express = require('express');
 var routes = require('./routes');
 var table = require('./routes/table');
+var user = require('./routes/user');
 var http = require('http');
 var path = require('path');
 
@@ -21,9 +22,11 @@ app.use(express.logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded());
 app.use(express.methodOverride());
+app.use(express.cookieParser());
+app.use(express.session({secret: '9YUv495s928Nl5vhaha1212'}));
 app.use(app.router);
 app.use(express.static(path.join(__dirname, 'public')));
-app.use("/table", express.static(path.join(__dirname, '/../client')));
+app.use("/client", express.static(path.join(__dirname, '/../client')));
 
 // development only
 if ('development' == app.get('env')) {
@@ -33,7 +36,8 @@ if ('development' == app.get('env')) {
 app.get('/', routes.index);
 app.get('/table', table.newTable);
 app.get('/table/:tableId', table.loadTable);
-// app.get('/users', user.list);
+app.get('/user/name', user.getName);
+app.get('/user/name/:newName', user.setName);
 
 http.createServer(app).listen(app.get('port'), function(){
   console.log('Express server listening on port ' + app.get('port'));

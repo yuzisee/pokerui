@@ -1,12 +1,17 @@
 var path = require('path');
 
-exports.newTable = function(req, res){
+exports.newTable = function(req, res, next){
 		tableId = randomStr(5);
+        req.session.lastTableId = tableId;
 		res.redirect('/table/'+tableId);
 };
 
-exports.loadTable = function(req, res){
-	// Add security
+exports.loadTable = function(req, res, next){
+    var tableId = req.params.tableId;
+    
+    if(req.session.lastTableId != tableId){
+        console.log("WEIRD! we were last on table " + req.session.lastTableId);
+    }
 	console.log("TABLE ID: " + tableId);
   	res.sendfile(path.join(__dirname, "/../../client/table.html"));
 };

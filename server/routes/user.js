@@ -1,8 +1,13 @@
 
 /*
- * GET users listing.
+ * Manage user and things
  */
 
-exports.list = function(req, res){
-  res.send("respond with a resource");
+exports.getName = function(req, res){
+  res.json({name:req.session.playerName});
+};
+
+exports.setName = function(req, res){
+  req.session.playerName = req.params.newName;
+  exports.getName(req,res);
 };
