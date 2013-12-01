@@ -11,6 +11,39 @@
 
 static const double CHIP_DENOM = 0.01; // Minimum bet denomination
 
+class PokerAiShowdown {
+public:
+  PokerAiShowdown() : winnerName(""), winnerIdx(-1) {}
+
+  void execute(HoldemArena &fTable, playernumber_t lastHighbet, const DeckLocationPair * const holeCards, const CommunityPlus &community, std::ostream &showdownlog) {
+    fTable.PrepShowdownRound(community, showdownlog);
+
+    fReveals.clear();
+    std::vector<ShowdownRep> winners;
+    ///------------------------------------
+    ///  GENERATE A LIST OF WINNERS
+    HoldemArenaShowdown w(&fTable,lastHighbet);
+    while(w.bRoundState != '!')
+    {
+      CommunityPlus hand;
+      hand.AddToHand(holeCards[w.WhoIsNext()].a);
+      hand.AddToHand(holeCards[w.WhoIsNext()].b);
+      fReveals.push_back(w.RevealHand(hand, community, gamelog));
+    }
+    winners.assign(w.winners.begin(),w.winners.end());
+    // fTable.compareAllHands(community, lastHighBet, winners, showdownlog);
+    ///------------------------------------
+
+    fTable.ProcessShowdownResults(winners, showdownlog);
+
+    fTable.RefreshPlayers(showdownLog); ///New Hand (handnum is also incremented now)
+  }
+
+private:
+  std::vector<Reveal> fReveals;
+}
+;
+
 
 class PokerAiRoundSetup {
 
@@ -90,7 +123,8 @@ public:
 
   }
 
-  
+  const CommunityPlus &community() const { return fCommunity; }
+  const DeckLocationPair * holeCards() const { return fDealtHolecards; }
 
 private:
   RandomDeck r;
@@ -179,13 +213,13 @@ struct PokerAiMakeBet {
   struct MinRaiseError minRaiseMsg;
   double adjustedRaiseTo; // This is populated to your actual bet. If it doesn't match your intended bet it was because of minRaise rules.
 
-  bool bRoundEnded; // If true, this betting round has concluded
+  bool bRoundDone; // If true, this betting round has concluded
 
   // If 'F' all betting rounds have concluded due to all-fold.
   // If 'C' all betting rounds have concluded and we're at the showdown.
-  char bHandEnded;
+  char bHandDone;
 
-  MakeBet(playernumber_t seatNum, HoldemArena &fTable, PokerAiRoundSetup &fTableRound, double amount) :
+  MakeBet(playernumber_t seatNum, HoldemArena &fTable, PokerAiRoundSetup &fTableRound, double amount, std::ostream &showdownlog, PokerAiShowdown * const out) :
   bSuccess(false)
   ,
   fHighbetIdx(-1)
@@ -194,9 +228,9 @@ struct PokerAiMakeBet {
   ,
   adjustedRaiseTo(std::numeric_limits<double>::signaling_NaN())
   ,
-  bRoundEnded(false)
+  bRoundDone(false)
   ,
-  bHandEnded('\0')
+  bHandDone('\0')
   {
     // NOTE ABOUT EARLY RETURNS: bSuccess is false by default.
 
@@ -245,6 +279,8 @@ struct PokerAiMakeBet {
           return;
         } else {
           // All betting rounds complete.
+
+          out->execute(fTable, highbet, fTableRound.holeCards(), fTableRound.community(), showdownlog);
 
           fTableRound.clear();
           result.bSuccess = true;
@@ -332,7 +368,7 @@ public:
 
   // Return true on success, false on error
   PokerAiMakeBet makeBet(playernumber_t seatNum, double amount) {
-    PokerAiMakeBet result(seatNum, fTable, fTableRound, amount);
+    PokerAiMakeBet result(seatNum, fTable, fTableRound, amount, *fLastShowdown);
     return result;
   }
 
@@ -357,7 +393,7 @@ private:
 
   HoldemArena fTable;
   PokerAiRoundSetup fTableRound;
-  PokerAiShowdownSetup fTableShowdown;
+  PokerAiShowdown fLastShowdown;
 
 
 }
@@ -1017,7 +1053,6 @@ void Init(v8::Handle<v8::Object> exports) {
   pokerai.exports.getOutcome({ 'id': <onDiskId>, '_instance': <instanceHandle> }, handNum)
   JSON Response:
   {
-    'winner': 'Nav',
     'handsRevealed': {
             'Nav': {'cards', ['9s', 'Th'], 'outcome': 'Full House: Nines over Tens'},
             'Joseph': {'cards', [], 'outcome': 'muck'}
