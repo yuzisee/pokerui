@@ -32,7 +32,7 @@ exports.getUser = function(req, res){
 	res.json(user);
 };
 
-exports.postUser = function(req, res){
+exports.updateUser = function(req, res){
 	// userid = req.params.userid;
 	req.session.name = req.body.name;
 	exports.getUser(req, res)

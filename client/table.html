@@ -7,10 +7,17 @@
   <body>
     <div ng-controller="PkTable">
       <div>
-        <h1>Hello {{user.name}}!</h1>
+        <h1>{{user.name}} on Table: {{table.id}} <input ng-if="table" type="button" ng-click="joinTable()" value="Join"></h1>
         <label>Name:</label>
         <input type="text" ng-model="user.name" placeholder="Enter a name here">
-        <input type="button" ng-click="save(user)" value="Save">
+        <input type="button" ng-click="saveUser(user)" value="Save">
+      </div>
+      <div>
+        Players:
+          <!-- <ul> -->
+            <li ng-repeat="player in table.players">{{player.name}}</li>
+          <!-- </ul> -->
+        <p>State: {{table.state}}</p>
       </div>
     </div>
   </body>

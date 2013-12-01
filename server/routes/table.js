@@ -10,6 +10,12 @@ exports.table = function(req, res, next){
 
 exports.newTable = function(req, res, next){
 		tableId = randomStr(5);
+        global.tables[tableId] = {
+            'id': tableId,
+            'players': {},
+            'state' : 'WAITING'
+        };
+
         req.session.lastTableId = tableId;
 		res.redirect('/table/'+tableId);
 };
