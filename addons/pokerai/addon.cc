@@ -37,7 +37,7 @@ public:
     delete fGamelog;
   }
 
-  void startNewHand() {
+  bool startNewHand() {
     ++handNum;
 
     struct BlindValues bl;
@@ -46,15 +46,8 @@ public:
     myTable.BeginInitialState(handNum);
     myTable.BeginNewHands(bl, false);
 
-    //Preflop
-    // true: first betting round of the hand
-    // 3: flop, turn, river remaining
-    PrepBettingRound(true,3);  
-
-    fCommunity.SetEmpty();
-    fComSize = 0;
-
-    b = new HoldemArenaBetting(&fTable, fCommunity, fComSize);
+    return startBettingRound(0);
+    // TODO(from yusizee): Pre-deal all hands and all community cards here and store them in memory.
   }
 
   handnum_t handNum() const {
@@ -81,6 +74,47 @@ public:
     return fTable.ViewPlayer(curIndex)->GetIdent();
   }
 
+  // Return true on success, false on error
+  bool makeBet(playernumber_t seatNum, double amount) {
+    if (!b) {
+      return false;
+    }
+
+    if (seatNum != b->WhoIsNext()) {
+      return false;
+    }
+
+    // === Make the bet ===
+    b->MakeBet(amount);
+
+    // Epilog
+    switch(b->bBetState) {
+      case 'b':
+        // More betting is taking place.
+        return true;
+      case 'C':
+        // The round is done. Go on to the next round.
+
+        if (retval.seat_number == -1) {
+          // INCONSISTENT RESULT!
+          return false;
+        }
+        delete b;       
+        startNextBettingRound();
+        return true;
+      case 'F':
+        // The hand is done. Go on to the next hand.
+
+        if (retval.seat_number != -1) {
+          // INCONSISTENT RESULT!
+          return false;
+        }
+        delete b;
+        return true;
+      default:
+        return false;
+  }
+
 private:
   const std::string fOnDiskId;
   std::ofstream * const fGamelog;
@@ -91,6 +125,62 @@ private:
   CommunityPlus fCommunity;
   int8 fComSize;
 
+  bool startNextBettingRound() {
+    switch(fComSize) {
+      case 0:
+        // Finished, pre-flop, start post-flop
+        return startBettingRound(3);
+      case 3:
+        return startBettingRound(4);
+      case 4:
+        return startBettingRound(5);
+      case 5:
+        // TODO(from yuzisee): Go through the entire showdown, store the result, and move on to the next hand.
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  bool startBettingRound(int8 comSize) {
+    fComSize = comSize;
+
+    switch(comSize) {
+      case 0:
+      //Preflop
+      // true: first betting round of the hand
+      // 3: flop, turn, river remaining
+        fTable.PrepBettingRound(true,3);  
+        fCommunity.SetEmpty();
+        break;
+      case 3:
+      //Flop
+        fTable.PrepBettingRound(false,2);
+        fCommunity.AddToHand(fDealtCommunity[0]);
+        fCommunity.AddToHand(fDealtCommunity[1]);
+        fCommunity.AddToHand(fDealtCommunity[2]);
+        break;
+      case 4:
+      // Turn
+        fTable.PrepBettingRound(false,1);
+        fCommunity.AddToHand(fDealtCommunity[3]);
+        break;
+      case 5:
+        fTable.PrepBettingRound(false,0);
+        fCommunity.AddToHand(fDealtCommunity[4]);
+        break;
+      default:
+        return false;
+    }
+
+    b = new HoldemArenaBetting(&fTable, fCommunity, fComSize);
+
+    if (b) {
+      return true;
+    } else {
+      return false;
+    }
+  }
 }
 ;
 
@@ -622,18 +712,22 @@ v8::Handle<v8::Value> PerformAction(const v8::Arguments& args) {
     // Extra sanity check that the player ID is correct.
   }
 
-  if (arg1->Get(v8::String::NewSymbol("action"))->IsString()) {
+  if (arg1->Get(v8::String::NewSymbol("_action"))->IsString()) {
     // Extra sanity check on your action?
   }
 
+  if (!arg1->Get(v8::String::NewSymbol("_seatNumber"))->IsUint32()) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Second argument must contain ._seatNum (for now) -- we will get rid of this requirement later.")));
+    return scope.Close(v8::Undefined());
+  }
+
   if (!arg1->Get(v8::String::NewSymbol("amount"))->IsNumber()) {
-    // Extra sanity check on your action?
     v8::ThrowException(v8::Exception::TypeError(v8::String::New("Second argument must contain .amount")));
     return scope.Close(v8::Undefined());
   }
 
   double amount = arg1->Get(v8::String::NewSymbol("amount"))->NumberValue();
-
+  uint32_t seatNum = arg1->Get(v8::String::NewSymbol("_seatNumber"))->Uint32Value();
 
   PokerAiInstance * const table = readFirstArgumentAsTable(args);
 
@@ -644,7 +738,11 @@ v8::Handle<v8::Value> PerformAction(const v8::Arguments& args) {
 
   // === Apply the action
 
-  table->MakeBet(amount);
+  bool success = table->makeBet(seatNum, amount);
+  if (!success) {
+    v8::ThrowException(v8::Exception::ReferenceError(v8::String::New("It was not your turn!")));
+    return scope.Close(v8::Undefined());
+  }
 
   // === No return value
 
@@ -752,7 +850,7 @@ void Init(v8::Handle<v8::Object> exports) {
 
 
 /*
-  pokerai.exports.performAction({ 'id': <onDiskId>, '_instance': <instanceHandle> }, {'_playerId': 'Joseph', 'action': 'call', 'amount': 10.0})
+  pokerai.exports.performAction({ 'id': <onDiskId>, '_instance': <instanceHandle> }, {'_playerId': 'Joseph', '_seatNumber': 2, 'action': 'call', 'amount': 10.0})
 */
   exports->Set(v8::String::NewSymbol("performAction"),
      v8::FunctionTemplate::New(PerformAction)->GetFunction());
