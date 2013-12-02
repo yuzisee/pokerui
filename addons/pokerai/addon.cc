@@ -119,10 +119,12 @@ public:
     clear();
 
     // == Init
+    printf("== Init\n");
 
     fPlayerCount = myTable.NumberAtTable();
 
     // == Deal cards
+    printf("== Deal cards\n");
 
     r.ShuffleDeck();
 
@@ -146,6 +148,7 @@ public:
     }
 
     // == Begin the first round
+    printf("== Begin the first round\n");
  
     myTable.BeginInitialState(handnum);
     myTable.BeginNewHands(gamelog, blinds,false);
@@ -237,15 +240,17 @@ private:
 
   bool startBettingRound(HoldemArena& myTable, std::ostream * spectateLog) {
     if (fB) {
-      // Error: fB already exists
+      printf("Error: fB already exists\n");
       return false;
     }
 
     fB = new HoldemArenaBetting(&myTable, fCommunity, fComSize, spectateLog);
 
     if (fB) {
+      printf("startBettingRound() OK");
       return true;
     } else {
+      printf("Error: malloc failed");
       return false;
     }
   }
@@ -255,7 +260,6 @@ private:
 struct PokerAiMakeBet {
   bool bSuccess; // true if no errors
   playernumber_t fHighbetIdx; // This is the last player to raise.
-  std::string fHighbetIdent;
 
   struct MinRaiseError fMinRaiseMsg;
   double fAdjustedRaiseTo; // This is populated to your actual bet. If it doesn't match your intended bet it was because of minRaise rules.
@@ -270,8 +274,6 @@ struct PokerAiMakeBet {
   bSuccess(false)
   ,
   fHighbetIdx(-1)
-  ,
-  fHighbetIdent("")
   ,
   fAdjustedRaiseTo(std::numeric_limits<double>::signaling_NaN())
   ,
@@ -292,10 +294,14 @@ struct PokerAiMakeBet {
     }
 
     // === Make the bet ===
+    printf("=== Make the bet\n");
+
     HoldemAction action(fTableRound.b().MakeBet(amount, &fMinRaiseMsg));
+
+    // === Read the result ===
+    HoldemArena::ToString(action, gamelog);
     const char newState = fTableRound.b().bBetState;
     fHighbetIdx = fTableRound.b().playerCalled;
-    fHighbetIdent = fTable.ViewPlayer(fHighbetIdx)->GetIdent();
 
     if (fMinRaiseMsg.result != fMinRaiseMsg.result) {
       // NaN msg, so our bet was untouched.
@@ -304,9 +310,12 @@ struct PokerAiMakeBet {
       fAdjustedRaiseTo = fMinRaiseMsg.result;
     }
 
-    // Epilog
+    // === Epilog
+    printf("=== Epilog\n");
+
     switch(newState) {
       case 'b':
+        printf("MakeBet() success\n");
         // More betting is taking place.
         bSuccess = true;
         return;
@@ -348,7 +357,7 @@ struct PokerAiMakeBet {
         bHandDone = newState;
         return;
       default:
-        // error unknown state
+        printf("Error: Unknown newState %c\n", newState);
         return;
     }
   }
@@ -665,15 +674,18 @@ v8::Handle<v8::Value> StartTable(const v8::Arguments& args) {
     return scope.Close(v8::Undefined());
   }
 
-
   if (verify != table) {
-    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Self-table failed.")));
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Self-test failed.")));
     return scope.Close(v8::Undefined());
   }
 
   // === Start the first hand (AUTOMATIC)
 
-  table->startFirstHand();
+  bool success = table->startFirstHand();
+  if (!success) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("startFirstHand() failed.")));
+    return scope.Close(v8::Undefined());
+  }
 
   // === Return result
 
@@ -1029,6 +1041,7 @@ v8::Handle<v8::Value> PerformAction(const v8::Arguments& args) {
 
   // === Apply the action
 
+  printf("== Apply the action\n");
 
   PokerAiMakeBet info = table->makeBet(seatNum, amount);
   if (!info.bSuccess) {
