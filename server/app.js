@@ -8,6 +8,7 @@ var routes = require('./routes');
 var table = require('./routes/table');
 var api_user = require('./routes/api_user');
 var api_table = require('./routes/api_table');
+var pokerai = require('../addons/pokerai/build/Release/pokerai');
 var http = require('http');
 var path = require('path');
 
@@ -56,6 +57,12 @@ app.get('/api/table', api_table.getAll);
 app.get('/api/table/:tableid', api_table.getTable);
 app.post('/api/table/:tableid', api_table.updateTable);
 app.post('/api/table/:tableid/join', api_table.joinTable);
+app.post('/api/table/:tableid/startgame', api_table.startGame);
+app.get('/api/table/:tableid/status', api_table.getLiveStatus);
+app.post('/api/table/:tableid/hand/:handNum/actions', api_table.performAction);
+app.get('/api/table/:tableid/hand/:handNum/actions', api_table.getActionSituation);
+app.get('/api/table/:tableid/hand/:handNum/outcome', api_table.getOutcome);
+app.get('/api/table/:tableid/hand/:handNum/seat/:seatNum/holecards', api_table.getHolecards);
 
 http.createServer(app).listen(app.get('port'), function(){
   console.log('Express server listening on port ' + app.get('port'));
