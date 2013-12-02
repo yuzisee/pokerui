@@ -480,6 +480,10 @@ public:
   
   const PokerAiShowdown &reveals() const { return fLastShowdown; }
 
+  double chipCountAtLastCheckpoint(playernumber_t seatNum) const { return fTable.ViewPlayer(seatNum)->GetMoney(); }
+
+  playernumber_t playersAtTable() const { return fTable.NumberAtTable(); }
+
   const std::string &playerName(playernumber_t seatNum) const { return fTable.ViewPlayer(seatNum)->GetIdent(); }
 
   const std::string &dealer() const { return playerName(fTable.GetDealer()); }
@@ -840,13 +844,15 @@ v8::Handle<v8::Value> GetActionSituation(const v8::Arguments& args) {
   bets->Set(4, betToJson("Nav", 0, "raiseTo", 10.0));
   bets->Set(4, betToJson("Joseph", 1, "check", 10.0));
  
+ */
+
   // === Populate chipCounts
 
   v8::Handle<v8::Object> chipCounts = v8::Object::New();
-  chipCounts->Set(v8::String::NewSymbol("Nav"), v8::Number::New(500.0));
-  chipCounts->Set(v8::String::NewSymbol("Joseph"), v8::Number::New(450.0));
+  for (playernumber_t k=0; k<table->playersAtTable(); ++k) {
+    chipCounts->Set(v8::String::NewSymbol(table->playerName(k).c_str()), v8::Number::New(table->chipCountAtLastCheckpoint(k)));
+  }
  
- */
  
   // === Populate community
 
@@ -864,6 +870,7 @@ v8::Handle<v8::Value> GetActionSituation(const v8::Arguments& args) {
   v8::Local<v8::Object> obj = v8::Object::New();
   obj->Set(v8::String::NewSymbol("dealerOn"), v8::String::New(table->dealer().c_str()));
   obj->Set(v8::String::NewSymbol("communitySoFar"), community);
+  obj->Set(v8::String::NewSymbol("chipCountsAtLastCheckpoint"), chipCounts);
 
   return scope.Close(obj);
 
@@ -1174,6 +1181,7 @@ void Init(v8::Handle<v8::Object> exports) {
   {
     'dealerOn': <playerId>
     'communitySoFar': ['Kh', 'Ts', '9h']
+    'chipCountsSinceLastCheckpoint': { 'bot2': 500.0, ...  }
   }
 */
   exports->Set(v8::String::NewSymbol("getActionSituation"),

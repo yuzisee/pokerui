@@ -15,15 +15,19 @@ console.log(addon.getStatus(obj1));
 console.log(addon.getActionSituation(obj1, 1));
 console.log(addon.performAction(obj1, {'_playerId': 'Joseoh', '_seatNumber': 1, '_action': 'callTo', 'amount': 50.0}));
 
+console.log(addon.getActionSituation(obj1, 1));
 console.log(addon.getStatus(obj1));
 console.log(addon.getOutcome(obj1, 1));
 
 console.log("Check-check on flop. Note that the dealer goes last in heads-up, so Joseph acts first now");
 console.log(addon.performAction(obj1, {'_playerId': 'Joseoh', '_seatNumber': 1, '_action': 'check', 'amount': 0.0}));
 console.log(addon.getStatus(obj1));
+console.log(addon.getActionSituation(obj1, 1));
 console.log(addon.performAction(obj1, {'_playerId': 'Nav', '_seatNumber': 0, '_action': 'check', 'amount': 0.0}));
+console.log(addon.getActionSituation(obj1, 1));
 // Check-check on turn
 console.log(addon.performAction(obj1, {'_playerId': 'Joseoh', '_seatNumber': 1, '_action': 'check', 'amount': 0.0}));
+console.log(addon.getActionSituation(obj1, 1));
 console.log(addon.performAction(obj1, {'_playerId': 'Nav', '_seatNumber': 0, '_action': 'check', 'amount': 0.0}));
 // Check-check on river
 console.log(addon.performAction(obj1, {'_playerId': 'Joseoh', '_seatNumber': 1, '_action': 'check', 'amount': 0.0}));
