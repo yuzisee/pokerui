@@ -227,6 +227,15 @@ public:
     return true;
   }
 
+  std::vector<DeckLocation> communitySoFar() const {
+    std::vector<DeckLocation> result;
+    for (size_t k=0; k<fComSize; ++k) {
+      result.push_back(fDealtCommunity[k]);
+    }
+    return result;
+  }
+
+
 
 private:
   RandomDeck r;
@@ -235,7 +244,7 @@ private:
   DeckLocation fDealtCommunity[5];
 
   CommunityPlus fCommunity;
-  int8 fComSize;
+  size_t fComSize;
   HoldemArenaBetting * fB;
 
   bool startBettingRound(HoldemArena& myTable, std::ostream * spectateLog) {
@@ -284,12 +293,12 @@ struct PokerAiMakeBet {
     // NOTE ABOUT EARLY RETURNS: bSuccess is false by default.
 
     if (!fTableRound.hasCurrentBettingRound()) {
-      // error
+      printf("Error: No current betting round");
       return;
     }
 
     if (seatNum != fTableRound.b().WhoIsNext()) {
-      // error
+      printf("Error: MakeBet is called by %d but Action is on %d\n", seatNum, fTableRound.b().WhoIsNext());
       return;
     }
 
@@ -451,7 +460,11 @@ public:
   
   const PokerAiShowdown &reveals() const { return fLastShowdown; }
 
-  const std::string & playerName(playernumber_t seatNum) const { return fTable.ViewPlayer(seatNum)->GetIdent(); }
+  const std::string &playerName(playernumber_t seatNum) const { return fTable.ViewPlayer(seatNum)->GetIdent(); }
+
+  const std::string &dealer() const { return playerName(fTable.GetDealer()); }
+
+  const std::vector<DeckLocation> communitySoFar() const { return fTableRound.communitySoFar(); }
 
   const std::string fOnDiskId;
 private:
@@ -758,24 +771,12 @@ v8::Handle<v8::Value> GetStatus(const v8::Arguments& args) {
   return scope.Close(obj);
 }
 
-// Create a JSON object of the form:
-//  {'id': 'Nav', 'action': 'raiseTo', 'amount': 5.0}
-static v8::Local<v8::Object> betToJson(const char * const id, const playernumber_t seatNum, const char * const action, double amount) {
-  v8::Local<v8::Object> obj = v8::Object::New();
-  obj->Set(v8::String::NewSymbol("_playerId"), v8::String::New(id));
-  obj->Set(v8::String::NewSymbol("_seatNumber"), v8::Uint32::New(seatNum));
-  obj->Set(v8::String::NewSymbol("_action"), v8::String::New(action));
-  obj->Set(v8::String::NewSymbol("amount"), v8::Number::New(amount));
-  return obj;
-}
 
 
-// Create a JSON object of the form:
-//  {'checkpoint': 'flop'}
-static v8::Local<v8::Object> checkpointToJson(const char * const name) {
-  v8::Local<v8::Object> obj = v8::Object::New();
-  obj->Set(v8::String::NewSymbol("checkpoint"), v8::String::New(name));
-  return obj;
+static std::string toString(const DeckLocation &d) {
+  std::ostringstream s;
+  HoldemUtil::PrintCard(s, d.GetIndex());
+  return s.str();
 }
 
 v8::Handle<v8::Value> GetActionSituation(const v8::Arguments& args) {
@@ -808,6 +809,7 @@ v8::Handle<v8::Value> GetActionSituation(const v8::Arguments& args) {
     return scope.Close(v8::Undefined());
   }
 
+/*
   // === Populate bets
 
   v8::Handle<v8::Array> bets = v8::Array::New(6);
@@ -824,35 +826,29 @@ v8::Handle<v8::Value> GetActionSituation(const v8::Arguments& args) {
   chipCounts->Set(v8::String::NewSymbol("Nav"), v8::Number::New(500.0));
   chipCounts->Set(v8::String::NewSymbol("Joseph"), v8::Number::New(450.0));
  
+ */
  
   // === Populate community
 
-  v8::Handle<v8::Array> community = v8::Array::New(3);
-  community->Set(0, v8::String::New("2h"));
-  community->Set(1, v8::String::New("Th"));
-  community->Set(2, v8::String::New("2c"));
- 
+  const std::vector<DeckLocation> communitySoFar = table->communitySoFar();
 
+  v8::Handle<v8::Array> community = v8::Array::New(communitySoFar.size());
+
+  for(size_t k=0; k<communitySoFar.size(); ++k) {
+    community->Set(k, v8::String::New(toString(communitySoFar[k]).c_str()));
+  }
 
   // === Return result
 
 
   v8::Local<v8::Object> obj = v8::Object::New();
-  obj->Set(v8::String::NewSymbol("pot"), bets);
-  obj->Set(v8::String::NewSymbol("chipCounts"), chipCounts);
-  obj->Set(v8::String::NewSymbol("dealerOn"), v8::String::New("Nav"));
-  obj->Set(v8::String::NewSymbol("community"), community);
+  obj->Set(v8::String::NewSymbol("dealerOn"), v8::String::New(table->dealer().c_str()));
+  obj->Set(v8::String::NewSymbol("communitySoFar"), community);
 
   return scope.Close(obj);
 
 }
 
-
-static std::string toString(const DeckLocation &d) {
-  std::ostringstream s;
-  HoldemUtil::PrintCard(s, d.GetIndex());
-  return s.str();
-}
 
 
 // Create a JSON object of the form:
@@ -918,7 +914,9 @@ v8::Handle<v8::Value> GetOutcome(const v8::Arguments& args) {
   }
 
   v8::Handle<v8::Object> handsRevealed = v8::Object::New();
-  for (const struct PokerAiReveal &r : table->reveals().reveals()) {
+  const std::vector<PokerAiReveal> reveals = table->reveals().reveals();
+  for (size_t k=0; k<reveals.size(); ++k) {
+    const struct PokerAiReveal &r = reveals[k];
     if (r.outcome == "") {
       handsRevealed->Set(v8::String::NewSymbol(r.playerName.c_str()), muckToJson());
     } else {
@@ -1053,9 +1051,33 @@ v8::Handle<v8::Value> PerformAction(const v8::Arguments& args) {
     // HAND DONE! Clean everything up.
     table->startNextHand();
   }
-  // === No return value
+  // === Return resut
 
-  return scope.Close(v8::Undefined());
+  v8::Local<v8::Object> obj = v8::Object::New();
+  obj->Set(v8::String::NewSymbol("adjustedBetTo"), v8::Number::New(info.fAdjustedRaiseTo));
+
+  if (info.bRoundDone) {
+    switch(table->communitySoFar().size()) {
+      case 3:
+        obj->Set(v8::String::NewSymbol("checkpoint"), v8::String::New("flop"));
+        break;
+      case 4:
+        obj->Set(v8::String::NewSymbol("checkpoint"), v8::String::New("turn"));
+        break;
+      case 5:
+        obj->Set(v8::String::NewSymbol("checkpoint"), v8::String::New("river"));
+        break;
+    }
+  }
+
+  if (info.bHandDone == 'F') {
+    obj->Set(v8::String::NewSymbol("checkpoint"), v8::String::New("all fold"));
+  }
+  if (info.bHandDone == 'C') {
+    obj->Set(v8::String::NewSymbol("checkpoint"), v8::String::New("showdown"));
+  }
+
+  return scope.Close(obj);
 
 }
 
@@ -1128,6 +1150,12 @@ void Init(v8::Handle<v8::Object> exports) {
     'dealerOn': <playerId>
     'community': ['Kh', 'Ts', '9h'],
   }
+
+  Actual return value:
+  {
+    'dealerOn': <playerId>
+    'communitySoFar': ['Kh', 'Ts', '9h']
+  }
 */
   exports->Set(v8::String::NewSymbol("getActionSituation"),
      v8::FunctionTemplate::New(GetActionSituation)->GetFunction());
@@ -1159,6 +1187,11 @@ void Init(v8::Handle<v8::Object> exports) {
 
 /*
   pokerai.exports.performAction({ 'id': <onDiskId>, '_instance': <instanceHandle> }, {'_playerId': 'Joseph', '_seatNumber': 2, '_action': 'call', 'amount': 10.0})
+  JSON Response:
+  {
+    'adjustedBetTo': 45.0,
+    'checkpoint': '';
+  }
 */
   exports->Set(v8::String::NewSymbol("performAction"),
      v8::FunctionTemplate::New(PerformAction)->GetFunction());
