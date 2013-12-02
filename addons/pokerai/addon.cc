@@ -15,9 +15,19 @@
 
 static const double CHIP_DENOM = 0.01; // Minimum bet denomination
 
+struct PokerAiReveal {
+  std::string playerName;
+  playernumber_t seatNum;
+  DeckLocation card1;
+  DeckLocation card2;
+  std::string outcome; // will be blank if the player mucks
+  
+  PokerAiReveal() : seatNum(-1) {}
+};
+
 class PokerAiShowdown {
 public:
-  PokerAiShowdown() {}
+  PokerAiShowdown() : fHandNum(-1) {}
 
   void execute(
     HoldemArena &fTable
@@ -30,6 +40,8 @@ public:
     ,
     std::ostream &showdownlog
   ) {
+    fHandNum = fTable.handnum;
+
     fTable.PrepShowdownRound(community, showdownlog);
 
     fReveals.clear();
@@ -39,10 +51,22 @@ public:
     HoldemArenaShowdown w(&fTable,lastHighbet);
     while(w.bRoundState != '!')
     {
+      PokerAiReveal result;
+      result.seatNum = w.WhoIsNext();
+      result.playerName = fTable.ViewPlayer(result.seatNum)->GetIdent();
+
       CommunityPlus hand;
       hand.AddToHand(holeCards[w.WhoIsNext()].first);
       hand.AddToHand(holeCards[w.WhoIsNext()].second);
-      fReveals.push_back(w.RevealHand(hand, community, showdownlog));
+      Reveal response = w.RevealHand(hand, community, showdownlog);
+
+      if(response.outcome != "") {
+        // Player revealed
+        result.outcome = response.outcome;
+        result.card1 = holeCards[w.WhoIsNext()].first;
+        result.card2 = holeCards[w.WhoIsNext()].second;
+      }
+      fReveals.push_back(PokerAiReveal());
     }
     winners.assign(w.winners.begin(),w.winners.end());
     // fTable.compareAllHands(community, lastHighBet, winners, showdownlog);
@@ -52,8 +76,12 @@ public:
 
   }
 
+  handnum_t handNum() const { return fHandNum; }
+  const std::vector<PokerAiReveal> &reveals() const { return fReveals; }
+
 private:
-  std::vector<Reveal> fReveals;
+  std::vector<PokerAiReveal> fReveals;
+  handnum_t fHandNum;
 }
 ;
 
@@ -346,6 +374,10 @@ public:
     fGamelog.close();
   }
 
+  void addHuman(const std::string &ident, double chips) {
+    fTable.AddHumanOpponent(ident.c_str(), chips);
+  }
+
   bool startFirstHand() {
     ++fHandNum;
 
@@ -408,10 +440,9 @@ public:
     return fTableRound.holeCards().data() + seatNum;
   }
   
+  const PokerAiShowdown &reveals() const { return fLastShowdown; }
 
-  void addHuman(const std::string &ident, double chips) {
-    fTable.AddHumanOpponent(ident.c_str(), chips);
-  }
+  const std::string & playerName(playernumber_t seatNum) const { return fTable.ViewPlayer(seatNum)->GetIdent(); }
 
   const std::string fOnDiskId;
 private:
@@ -805,17 +836,23 @@ v8::Handle<v8::Value> GetActionSituation(const v8::Arguments& args) {
 }
 
 
+static std::string toString(const DeckLocation &d) {
+  std::ostringstream s;
+  HoldemUtil::PrintCard(s, d.GetIndex());
+  return s.str();
+}
+
 
 // Create a JSON object of the form:
 // {'cards', ['9s', 'Th'], 'outcome': 'Full House: Nines over Tens'}
-static v8::Local<v8::Object> showdownToJson(const char * const card0, const char * const card1, const char * const outcome) {
+static v8::Local<v8::Object> showdownToJson(const DeckLocation &card1, const DeckLocation &card2, const std::string & outcome) {
   v8::Local<v8::Array> cards = v8::Array::New(2);
-  cards->Set(0, v8::String::New(card0));
-  cards->Set(1, v8::String::New(card1));
+  cards->Set(0, v8::String::New(toString(card1).c_str()));
+  cards->Set(1, v8::String::New(toString(card2).c_str()));
 
   v8::Local<v8::Object> obj = v8::Object::New();
   obj->Set(v8::String::NewSymbol("cards"), cards);
-  obj->Set(v8::String::NewSymbol("outcome"), v8::String::New(outcome));
+  obj->Set(v8::String::NewSymbol("outcome"), v8::String::New(outcome.c_str()));
   return obj;
 }
 
@@ -826,7 +863,7 @@ static v8::Local<v8::Object> muckToJson() {
 
   v8::Local<v8::Object> obj = v8::Object::New();
   obj->Set(v8::String::NewSymbol("cards"), cards);
-  obj->Set(v8::String::NewSymbol("outcome"), v8::String::New("muck"));
+  obj->Set(v8::String::NewSymbol("outcome"), v8::String::New("mucks"));
   return obj;
 }
 
@@ -860,16 +897,22 @@ v8::Handle<v8::Value> GetOutcome(const v8::Arguments& args) {
 
   const uint32_t handNum = args[1]->Uint32Value();
 
-  if (handNum < 1) {
+  // === Populate handsRevealed
+
+  const handnum_t activeRevealHandNum = table->reveals().handNum();
+
+  if (handNum != activeRevealHandNum) {
     return scope.Close(v8::Undefined());
   }
 
-  // === Populate handsRevealed
-
   v8::Handle<v8::Object> handsRevealed = v8::Object::New();
-  handsRevealed->Set(v8::String::NewSymbol("Nav"), showdownToJson("9s", "Th", "Full House: Nines over Tens"));
-  handsRevealed->Set(v8::String::NewSymbol("Joseph"), muckToJson());
- 
+  for (const struct PokerAiReveal &r : table->reveals().reveals()) {
+    if (r.outcome == "") {
+      handsRevealed->Set(v8::String::NewSymbol(r.playerName.c_str()), muckToJson());
+    } else {
+      handsRevealed->Set(v8::String::NewSymbol(r.playerName.c_str()), showdownToJson(r.card1, r.card2, r.outcome));
+    }      
+  }
  
   // === Return result
 
@@ -880,12 +923,6 @@ v8::Handle<v8::Value> GetOutcome(const v8::Arguments& args) {
 
   return scope.Close(obj);
 
-}
-
-static std::string toString(const DeckLocation &d) {
-  std::ostringstream s;
-  HoldemUtil::PrintCard(s, d.GetIndex());
-  return s.str();
 }
 
 
@@ -971,7 +1008,7 @@ v8::Handle<v8::Value> PerformAction(const v8::Arguments& args) {
   }
 
   if (!arg1->Get(v8::String::NewSymbol("_seatNumber"))->IsUint32()) {
-    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Second argument must contain ._seatNum (for now) -- we will get rid of this requirement later.")));
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Second argument must contain ._seatNumber (for now) -- we will get rid of this requirement later.")));
     return scope.Close(v8::Undefined());
   }
 
