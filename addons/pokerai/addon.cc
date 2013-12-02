@@ -50,7 +50,9 @@ public:
   ) {
     fHandNum = fTable.handnum;
 
+    printf("Before PrepShowdownRound dealer is %d\n", fTable.GetDealer());
     fTable.PrepShowdownRound(community, showdownlog);
+    printf("After PrepShowdownRound dealer is %d\n", fTable.GetDealer());
 
     fReveals.clear();
     std::vector<ShowdownRep> winners;
@@ -86,7 +88,10 @@ public:
     // fTable.compareAllHands(community, lastHighBet, winners, showdownlog);
     ///------------------------------------
 
+
+    printf("Before ProcessShowdownResults dealer is %d\n", fTable.GetDealer());
     fTable.ProcessShowdownResults(winners, showdownlog);
+    printf("After ProcessShowdownResults dealer is %d\n", fTable.GetDealer());
 
   }
 
@@ -134,6 +139,7 @@ public:
 
     // == Init
     printf("== Init\n");
+    printf("Supposing next dealer is %d\n", myTable.GetDealer());
 
     fPlayerCount = myTable.NumberAtTable();
 
@@ -163,14 +169,15 @@ public:
 
     // == Begin the first round
     printf("== Begin the first round\n");
- 
-    myTable.BeginInitialState(handnum);
+    printf("BeginNewHands as next dealer is %d\n", myTable.GetDealer());
     myTable.BeginNewHands(gamelog, blinds,false);
+    printf("After BeginNewHands, next dealer is %d\n", myTable.GetDealer());
 
     // true: first betting round of the hand
     // 3: flop, turn, river remaining
     myTable.PrepBettingRound(true,3);  
 
+    printf("Betting round up and running with dealer %d", myTable.GetDealer());
 
     return startBettingRound(myTable, &gamelog);
 
@@ -396,8 +403,6 @@ public:
   ,
   fGamelog(cOnDiskId.c_str(), std::ios_base::app)
   ,
-  fHandNum(0)
-  ,
   fTable(CHIP_DENOM, true, true)
   {
   }
@@ -411,23 +416,24 @@ public:
   }
 
   bool startFirstHand() {
-    ++fHandNum;
+    printf("Before BeginInitialState next dealer is %d\n", fTable.GetDealer());
+    fTable.BeginInitialState(); // TODO(from yuzisee): we can set the initial handnum to anything by calling BeginInitialState(handnum) if we want.
+    printf("After BeginInitialState next dealer is %d\n", fTable.GetDealer());
 
-    BlindValues bl;
-    bl.SetSmallBigBlind(5.0);
-    // TODO(from yuzisee): Create a new HoldemArena every time?
-    
-    return fTableRound.startNewHand(fHandNum, fTable, bl, fGamelog);
+    return startHandImpl();
   }
 
   bool startNextHand() {
     // To start a new hand, you first RefreshPlayers to clean up the previous hand.
+    printf("Before RefreshPlayers dealer is %d\n", fTable.GetDealer());
     fTable.RefreshPlayers(&fGamelog); ///New Hand (handnum is also incremented now)
-    return startFirstHand();
+    printf("After RefreshPlayers dealer is %d\n", fTable.GetDealer());
+
+    return startHandImpl();
   }
 
   handnum_t handNum() const {
-    return fHandNum;
+    return fTable.handnum;
   }
 
   // Returns empty string on error
@@ -483,11 +489,19 @@ public:
   const std::string fOnDiskId;
 private:
   std::ofstream fGamelog;
-  handnum_t fHandNum;
 
   HoldemArena fTable;
   PokerAiRoundSetup fTableRound;
   PokerAiShowdown fLastShowdown;
+
+
+  bool startHandImpl() {
+    BlindValues bl;
+    bl.SetSmallBigBlind(5.0);
+    // TODO(from yuzisee): Create a new HoldemArena every time?
+    
+    return fTableRound.startNewHand(fTable.handnum, fTable, bl, fGamelog);
+  }
 
 
 }
@@ -811,7 +825,7 @@ v8::Handle<v8::Value> GetActionSituation(const v8::Arguments& args) {
 
   const uint32_t handNum = args[1]->Uint32Value();
 
-  if (handNum < 1) {
+  if (handNum != table->handNum()) {
     return scope.Close(v8::Undefined());
   }
 
