@@ -3,7 +3,12 @@
  * Module dependencies.
  */
 
-var express = require('express');
+var express = require('express')
+  , app = express()
+  , server = require('http').createServer(app)
+  , io = require('socket.io').listen(server);
+
+// var express = require('express');
 var routes = require('./routes');
 var table = require('./routes/table');
 var api_user = require('./routes/api_user');
@@ -11,7 +16,7 @@ var api_table = require('./routes/api_table');
 var http = require('http');
 var path = require('path');
 
-var app = express();
+// var app = express();
 
 // all environments
 app.set('port', process.env.PORT || 3000);
@@ -57,6 +62,14 @@ app.get('/api/table/:tableid', api_table.getTable);
 app.post('/api/table/:tableid', api_table.updateTable);
 app.post('/api/table/:tableid/join', api_table.joinTable);
 
-http.createServer(app).listen(app.get('port'), function(){
+global.table_sockets = {};
+io.sockets.on('connection', function (socket) {
+	console.log("NEW CONNECTION!", socket.id);
+	socket.on('table:register', function(data, a, b){
+		console.log('table:register');
+		api_table.register(socket, data);
+	});
+});
+server.listen(app.get('port'), function(){
   console.log('Express server listening on port ' + app.get('port'));
 });

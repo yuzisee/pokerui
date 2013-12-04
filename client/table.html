@@ -2,6 +2,7 @@
   <head>
     <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.2.3/angular.min.js"></script>
     <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.2.3/angular-resource.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/0.9.16/socket.io.min.js"></script>
     <script src="/client/table.js"></script>
   </head>
   <body>
@@ -19,6 +20,7 @@
           <!-- </ul> -->
         <p>State: {{table.state}}</p>
       </div>
+      <input type="button" ng-click="connect()" value="Connect">
     </div>
   </body>
 </html>

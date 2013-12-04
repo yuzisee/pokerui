@@ -24,6 +24,18 @@ exports.joinTable = function(req, res){
     	name : req.session.name
     };
 	res.json(global.tables[tableid]);
+	console.log("JOINING");
+	for(idx in global.table_sockets[tableid]){
+		
+		global.table_sockets[tableid][idx]
+			.emit('table:' + tableid, 
+				{
+					'event': 'join',
+					'userid': req.session.userid,
+					'name': req.session.name 
+				}
+		);
+	}
 };
 
 exports.getTable = function(req, res){
@@ -34,4 +46,12 @@ exports.updateTable = function(req, res){
 	// userid = req.params.userid;
 	// req.session.name = req.body.name;
 	// exports.getUser(req, res)
+};
+
+exports.register = function(socket, data){
+	console.log("REGISTER!", data);
+	if(!global.table_sockets[data.tableid]){
+		global.table_sockets[data.tableid] = [];
+	}
+	global.table_sockets[data.tableid].push(socket);
 };

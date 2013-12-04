@@ -2,21 +2,52 @@ angular.module('pokerui', ['ngResource'])
 	.factory('User', function($resource){
 		return $resource('/api/user/:userId', {userId:'@id'});
 	})
-	.factory('Table', function($resource){
-		return $resource(
-					'/api/table/:tableId', 
-					{
-						tableId:'@id'
-					},
-					{
-						join: { 
-							method:'POST', 
-							url	: '/api/table/:tableId/join'
-						}
-					}
-				);
+	.factory('Table', function($rootScope, $resource){
+		var tables = [];
+		$rootScope.tables = tables;
+		var TableResource = $resource(
+			'/api/table/:tableId', 
+			{
+				tableId:'@id'
+			},
+			{
+				join: { 
+					method:'POST', 
+					url	: '/api/table/:tableId/join'
+				}
+			}
+		);
+		return function(tableId, callback){
+			var res = new TableResource.get({tableId:tableId}, function(table){
+				tables.push(table);
+				callback(table);
+			});
+		};
 	})
-	.controller('PkTable', function PkTable($scope, $timeout, User, Table) {
+	.factory('socket', function ($rootScope) {
+		var socket = io.connect('http://localhost:3000');
+		return {
+			on: function (eventName, callback) {
+				socket.on(eventName, function () {  
+					var args = arguments;
+					$rootScope.$apply(function () {
+						callback.apply(socket, args);
+					});
+				});
+			},
+			emit: function (eventName, data, callback) {
+				socket.emit(eventName, data, function () {
+					var args = arguments;
+					$rootScope.$apply(function () {
+						if (callback) {
+							callback.apply(socket, args);
+						}
+					});
+				})
+			}
+		};
+	})
+	.controller('PkTable', function PkTable($scope, $timeout, User, Table, socket) {
 
 		$scope.user = new User();
 		$scope.user.$save({}, function(resource){
@@ -24,16 +55,41 @@ angular.module('pokerui', ['ngResource'])
 		});
 
 		$scope.tableId = window.location.pathname.split('/table/')[1];
-		(function tick() {
-			var table = Table.get(
-				{tableId: $scope.tableId}, 
-				function(table){
-					$scope.table = table;
-					$timeout(tick, 3000);
-				});
-			}
-		)();
+
+		var table = Table($scope.tableId, function(table){
+			$scope.table = table
+		});
 		
+		socket.emit('table:register', {
+			tableid: $scope.tableId
+		});
+		
+		socket.on('table:' + $scope.tableId,  function (message) {
+			console.log(message);
+		});
+		
+		// debugger;
+		// var table = new Table({tableId:$scope.tableId});
+		// (function tick() {
+			// var table = Table.get(
+			// 	{tableId: $scope.tableId}, 
+			// 	function(table){
+			// 		$scope.table = table;
+			// 		// $timeout(tick, 3000);
+			// 	});
+			// // }
+
+			// var table = Table.get(
+			// 	{tableId: $scope.tableId+"asd"}, 
+			// 	function(table){
+			// 		// $scope.table = table;
+			// 		// $timeout(tick, 3000);
+			// 	});
+			// }
+		// )();
+		$scope.connect = function(){
+
+		}
 
 
 		$scope.saveUser = function(user){
