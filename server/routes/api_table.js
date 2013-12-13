@@ -75,7 +75,7 @@ exports.getOutcome = function(req, res) {
 	res.json(globals.tables[tableid]['hand'][handNum]['outcome']);
 };
 
-exports.getOutcome = function(req, res) {
+exports.getHolecards = function(req, res) {
 	var tableid = req.params.tableid;
 	var handNum = req.params.handNum;
 	var seatNum = req.params.seatNum;
@@ -120,4 +120,3 @@ exports.performAction = function(req, res){
 
 	res.json(pokeraiAction)
 };
-
