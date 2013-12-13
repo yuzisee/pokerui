@@ -17,25 +17,38 @@ exports.postAll = function(req, res){
 	// exports.getUser(req, res);
 };
 
-exports.joinTable = function(req, res){
-	var tableid = req.params.tableid;
-    global.tables[tableid]['players'][req.session.userid] = {
-    	id : req.session.userid,
+exports.joinTable = function(data){
+	var tableid = data.tableid;
+    global.tables[tableid]['players'][this.id] = {
+    	id : this.id,
     	name : req.session.name
     };
-	res.json(global.tables[tableid]);
-	console.log("JOINING");
-	for(idx in global.table_sockets[tableid]){
+    emitOnTable(tableid, 
+    {
+		'event': 'join',
+		'userid': this.id,
+		'table': global.tables[tableid]
+		// 'name': this.username 
+	});
+// 	var tableid = req.params.tableid;
+//     global.tables[tableid]['players'][req.session.userid] = {
+//     	id : req.session.userid,
+//     	name : req.session.name
+//     };
+
+// 	res.json(global.tables[tableid]);
+
+// 	for(idx in global.table_sockets[tableid]){
 		
-		global.table_sockets[tableid][idx]
-			.emit('table:' + tableid, 
-				{
-					'event': 'join',
-					'userid': req.session.userid,
-					'name': req.session.name 
-				}
-		);
-	}
+// 		global.table_sockets[tableid][idx]
+// 			.emit('table:' + tableid, 
+// 				{
+// 					'event': 'join',
+// 					'userid': req.session.userid,
+// 					'name': req.session.name 
+// 				}
+// 		);
+// 	}
 };
 
 exports.getTable = function(req, res){
@@ -48,10 +61,25 @@ exports.updateTable = function(req, res){
 	// exports.getUser(req, res)
 };
 
-exports.register = function(socket, data){
-	console.log("REGISTER!", data);
+exports.register = function(data){
 	if(!global.table_sockets[data.tableid]){
 		global.table_sockets[data.tableid] = [];
 	}
-	global.table_sockets[data.tableid].push(socket);
+
+	global.table_sockets[data.tableid].push(this);
+	registerTableMethodsOnSocket(socket, data.tableid);
+};
+
+registerTableMethodsOnSocket = function(socket, tableid){
+	prefix = "table:"+tableid+":";
+	socket.on(prefix + "join", function(a,b,c){
+		console.log(a,b,c)
+	});
+};
+
+emitOnTable = function(tableid, data) {
+	for(idx in global.table_sockets[tableid]){
+		global.table_sockets[tableid][idx]
+			.emit("table:"+tableid, data);
+	}
 };

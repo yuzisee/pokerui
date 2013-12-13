@@ -64,12 +64,12 @@ app.post('/api/table/:tableid/join', api_table.joinTable);
 
 global.table_sockets = {};
 io.sockets.on('connection', function (socket) {
-	console.log("NEW CONNECTION!", socket.id);
-	socket.on('table:register', function(data, a, b){
-		console.log('table:register');
-		api_table.register(socket, data);
-	});
+	socket.on('table:register', api_table.register);
+	// socket.on('table:register', function(data){
+	// 	api_table.register(socket, data);
+	// });
 });
+
 server.listen(app.get('port'), function(){
   console.log('Express server listening on port ' + app.get('port'));
 });

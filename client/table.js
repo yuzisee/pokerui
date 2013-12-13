@@ -54,17 +54,17 @@ angular.module('pokerui', ['ngResource'])
 			$scope.user = resource;
 		});
 
-		$scope.tableId = window.location.pathname.split('/table/')[1];
+		$scope.tableid = window.location.pathname.split('/table/')[1];
 
-		var table = Table($scope.tableId, function(table){
+		var table = Table($scope.tableid, function(table){
 			$scope.table = table
 		});
 		
 		socket.emit('table:register', {
-			tableid: $scope.tableId
+			tableid: $scope.tableid
 		});
 		
-		socket.on('table:' + $scope.tableId,  function (message) {
+		socket.on('table:' + $scope.tableid,  function (message) {
 			console.log(message);
 		});
 		
@@ -99,9 +99,11 @@ angular.module('pokerui', ['ngResource'])
 		}
 
 		$scope.joinTable = function(){
-			$scope.table.$join(function(table){
-				$scope.table = table;
-			});
+			console.log("Emiting on " + 'table:'+$scope.tableid+':join');
+			socket.emit('table:'+$scope.tableid+':join');
+			// $scope.table.$join(function(table){
+			// 	$scope.table = table;
+			// });
 		}
 	}
 );
