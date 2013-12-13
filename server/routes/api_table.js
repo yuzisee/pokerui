@@ -39,7 +39,7 @@ exports.updateTable = function(req, res){
 exports.startGame = function(req, res){
 	// TODO(from yuzisee): What happens if you call startGame twice? We must make sure we don't do that.
 	var tableid = req.params.tableid;
-	var pokeraiInstanceJson = pokerai.startTable(tableid + '.txt);
+	var pokeraiInstanceJson = pokerai.startTable(tableid + '.txt');
 	global.tables[tableid]['instance'] = pokeraiInstance;
 	// TODO(from yuzisee): You have to call pokeraiInstance.shutdownTable() at some point to save state, etc.
 
@@ -49,7 +49,7 @@ exports.startGame = function(req, res){
 	// Initialize action situation
 	global.tables[tableid]['hand'][1]['actionSituation'] = {'bets': [],
 		'chipCountsAtHandStart': chipCounts,
-		'chipCountsSinceCheckpoint' = chipCounts.
+		'chipCountsSinceCheckpoint': chipCounts,
 		'dealerOn': actionSituation,
 		'communitySoFar': actionSituation.communitySoFar}
 
