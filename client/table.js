@@ -16,13 +16,13 @@ angular.module('pokerui', ['ngResource'])
 					}
 				);
 	})
-	.controller('PkTable', function PkTable($scope, $timeout, User, Table) {
+	.controller('PkTable', function PkTable($scope, $timeout, $http, User, Table) {
 
-		$scope.user = new User();
-		$scope.user.$save({}, function(resource){
-			$scope.user = resource;
+		$http.get('/api/userid').then(function(res){
+			$scope.user = new User(res.data);
+			$scope.user.$get();
 		});
-
+		
 		$scope.tableId = window.location.pathname.split('/table/')[1];
 		(function tick() {
 			var table = Table.get(

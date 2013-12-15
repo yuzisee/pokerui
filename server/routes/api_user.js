@@ -17,7 +17,16 @@ exports.postAll = function(req, res){
 	exports.getUser(req, res);
 };
 
-exports.getUser = function(req, res){
+exports.getUserId = function(req, res) {
+	if(!req.session.userid) {
+		req.session.userid = (""+Math.random()).substring(2,7);
+		global.users.push(req.session.userid);
+	}
+
+	res.json({id:req.session.userid});
+};
+
+exports.getUser = function(req, res) {
 	userid = req.params.userid;
 
 	if (!req.session.name){

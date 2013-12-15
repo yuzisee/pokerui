@@ -41,6 +41,7 @@ app.get('/', routes.index);
 // Global where we keep a list of all users
 global.users = [];
 // Routes to REST /api/user
+app.get('/api/userid', api_user.getUserId);
 app.get('/api/user', api_user.getAll);
 app.post('/api/user', api_user.postAll);
 app.get('/api/user/:userid', api_user.getUser);
