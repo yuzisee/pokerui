@@ -20,9 +20,14 @@ angular.module('pokerui', ['ngResource'])
 
 		$http.get('/api/userid').then(function(res){
 			$scope.user = new User(res.data);
-			$scope.user.$get();
+			$scope.user.$get().then(function(user){
+				while(user.name == "Unknown" || !user.name){
+					user.name = prompt("Enter a good name!", user.name).trim();
+				}
+				user.$save();
+			});
 		});
-		
+
 		$scope.tableId = window.location.pathname.split('/table/')[1];
 		(function tick() {
 			var table = Table.get(
