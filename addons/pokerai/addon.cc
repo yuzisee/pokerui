@@ -159,6 +159,9 @@ public:
       b.SetByIndex(r.dealt.GetIndex());
 
       fDealtHolecards.push_back(DeckLocationPair(a, b));
+      // TODO(from yuzisee): hole cards are not logged at this time.
+      // Consider logging only when players show their hand anyway? If that's the case we wouldn't do the logging here.
+      // Furthermore, it's more secure if we definitely don't do the logging here since the players haven't revealed their hand yet.
     }
 
     for (size_t i=0; i<5; ++i) {
@@ -401,7 +404,7 @@ public:
   :
   fOnDiskId(cOnDiskId)
   ,
-  fGamelog(cOnDiskId.c_str(), std::ios_base::app)
+  fGamelog((cOnDiskId + "/game.log").c_str(), std::ios_base::app)
   ,
   fTable(CHIP_DENOM, true, true)
   {
@@ -411,6 +414,9 @@ public:
     fGamelog.close();
   }
 
+  void addBot(const std::string &ident, double chips) {
+    fTable.AddStrategyBot("game", fOnDiskId, ident.c_str(), chips, 'R');
+  }
 
   void addHuman(const std::string &ident, double chips) {
     fTable.AddHumanOpponent(ident.c_str(), chips);
@@ -425,6 +431,8 @@ public:
   }
 
   bool startNextHand() {
+    // TODO(from yuzisee): chipcounts aren't logged at this time, but could be.
+
     // To start a new hand, you first RefreshPlayers to clean up the previous hand.
     printf("Before RefreshPlayers dealer is %d\n", fTable.GetDealer());
     fTable.RefreshPlayers(&fGamelog); ///New Hand (handnum is also incremented now)
@@ -691,8 +699,7 @@ v8::Handle<v8::Value> StartTable(const v8::Arguments& args) {
           bool cBot = argBot->BooleanValue();
 
           if (cBot) {
-            v8::ThrowException(v8::Exception::TypeError(v8::String::New("TODO table->AddStrategyBot(cPlayerIdent.c_str(), startingChips, 'R');")));
-            return scope.Close(v8::Undefined());
+            table->addBot(cPlayerIdent, startingChips);
           } else {
             table->addHuman(cPlayerIdent, startingChips);
           }
@@ -871,9 +878,9 @@ v8::Handle<v8::Value> GetActionSituation(const v8::Arguments& args) {
 
 
   v8::Local<v8::Object> obj = v8::Object::New();
-  obj->Set(v8::String::NewSymbol("dealerOn"), v8::String::New(table->dealer().c_str()));
-  obj->Set(v8::String::NewSymbol("communitySoFar"), community);
-  obj->Set(v8::String::NewSymbol("chipCountsAtLastCheckpoint"), chipCounts);
+  obj->Set(v8::String::NewSymbol("dealer"), v8::String::New(table->dealer().c_str()));
+  obj->Set(v8::String::NewSymbol("community"), community);
+  obj->Set(v8::String::NewSymbol("chipsAtRound"), chipCounts);
 
   return scope.Close(obj);
 
@@ -1217,7 +1224,7 @@ void Init(v8::Handle<v8::Object> exports) {
 
  
 /*
-  pokerai.exports.getActionSituation({ 'id': <onDiskId>, '_instance': <instanceHandle> }, handNum)
+  Ideal HTTP GET "hand history"
   JSON Response:
   {
     'bets': [
@@ -1238,11 +1245,13 @@ void Init(v8::Handle<v8::Object> exports) {
     'community': ['Kh', 'Ts', '9h'],
   }
 
+  What the C++ can provide:
+  >>> pokerai.exports.getActionSituation({ 'id': <onDiskId>, '_instance': <instanceHandle> }, handNum)
   Actual return value:
   {
-    'dealerOn': <playerId>
-    'communitySoFar': ['Kh', 'Ts', '9h']
-    'chipCountsSinceLastCheckpoint': { 'bot2': 500.0, ...  }
+    'dealer': <playerId>
+    'community': ['Kh', 'Ts', '9h']
+    'chipsAtRound': { 'bot2': 500.0, ...  }
   }
 */
   exports->Set(v8::String::NewSymbol("getActionSituation"),
