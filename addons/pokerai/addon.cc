@@ -411,6 +411,7 @@ public:
     fGamelog.close();
   }
 
+
   void addHuman(const std::string &ident, double chips) {
     fTable.AddHumanOpponent(ident.c_str(), chips);
   }
@@ -489,6 +490,8 @@ public:
   const std::string &dealer() const { return playerName(fTable.GetDealer()); }
 
   const std::vector<DeckLocation> communitySoFar() const { return fTableRound.communitySoFar(); }
+
+  double getBotAction(playernumber_t seatNum) { return fTable.GetBetDecision(seatNum); }
 
   const std::string fOnDiskId;
 private:
@@ -1077,7 +1080,7 @@ v8::Handle<v8::Value> PerformAction(const v8::Arguments& args) {
     // HAND DONE! Clean everything up.
     table->startNextHand();
   }
-  // === Return resut
+  // === Return result
 
   v8::Local<v8::Object> obj = v8::Object::New();
   obj->Set(v8::String::NewSymbol("adjustedBetTo"), v8::Number::New(info.fAdjustedRaiseTo));
@@ -1107,6 +1110,64 @@ v8::Handle<v8::Value> PerformAction(const v8::Arguments& args) {
 
 }
 
+
+
+
+v8::Handle<v8::Value> GetBotAction(const v8::Arguments& args) {
+  v8::HandleScope scope;
+
+  // === Validate arguments
+
+  if (args.Length() != 2) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Wrong number of arguments")));
+    return scope.Close(v8::Undefined());
+  }
+
+  if (!args[1]->IsObject()) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Second argument must be a Javascript object")));
+    return scope.Close(v8::Undefined());
+  }
+
+  // === Read arguments
+
+  v8::Local<v8::Object> arg1 = args[1]->ToObject();
+
+  if (arg1->Get(v8::String::NewSymbol("_playerId"))->IsString()) {
+    // Extra sanity check that the player ID is correct.
+  }
+
+  if (!arg1->Get(v8::String::NewSymbol("seatNumber"))->IsUint32()) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Second argument must contain .seatNumber")));
+    return scope.Close(v8::Undefined());
+  }
+
+  uint32_t seatNum = arg1->Get(v8::String::NewSymbol("seatNumber"))->Uint32Value();
+
+  PokerAiInstance * const table = readFirstArgumentAsTable(args);
+
+  if (!table) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("First argument must be a object containg .id (must be a string and must match the onDiskId provided to startTable) and ._instance (must be an array of uint32 values)")));
+    return scope.Close(v8::Undefined());
+  }
+
+  // === Query the bot for an action
+
+  printf("== Query the bot\n");
+
+  const double botBetTo = table->getBotAction(seatNum);
+  if (!(botBetTo == botBetTo)) {
+    v8::ThrowException(v8::Exception::ReferenceError(v8::String::New("Error. Either the seat you gave wasn't a bot, or we had a mathetmatical error.")));
+    return scope.Close(v8::Undefined());
+  }
+
+  // === Return result
+
+  v8::Local<v8::Object> obj = v8::Object::New();
+  obj->Set(v8::String::NewSymbol("amount"), v8::Number::New(botBetTo));
+
+  return scope.Close(obj);
+
+}
 
 
 
@@ -1222,6 +1283,16 @@ void Init(v8::Handle<v8::Object> exports) {
 */
   exports->Set(v8::String::NewSymbol("performAction"),
      v8::FunctionTemplate::New(PerformAction)->GetFunction());
+
+/*
+  pokerai.exports.getBotAction({ 'id': <onDiskId>, '_instance': <instanceHandle> }, {'_playerId': 'Joseph', 'seatNumber': 2})
+  Actual response:
+  {
+    'amount': 10.0
+  }
+*/
+  exports->Set(v8::String::NewSymbol("getBotAction"),
+     v8::FunctionTemplate::New(GetBotAction)->GetFunction());
 
 }
 
