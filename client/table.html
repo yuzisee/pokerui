@@ -18,6 +18,8 @@
             <li ng-repeat="player in table.players">{{player.name}}</li>
           <!-- </ul> -->
         <p>State: {{table.state}}</p>
+
+        <input ng-if="table.state=='WAITING'" type="button" ng-click="startGame()" value="Start">
       </div>
     </div>
   </body>

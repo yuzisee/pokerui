@@ -12,6 +12,10 @@ angular.module('pokerui', ['ngResource'])
 						join: { 
 							method:'POST', 
 							url	: '/api/table/:tableId/join'
+						},
+						startgame: { 
+							method:'POST', 
+							url	: '/api/table/:tableId/startgame'
 						}
 					}
 				);
@@ -49,6 +53,13 @@ angular.module('pokerui', ['ngResource'])
 
 		$scope.joinTable = function(){
 			$scope.table.$join(function(table){
+				$scope.table = table;
+			});
+		}
+
+		$scope.startGame = function(){
+			$scope.table.$startgame(function(table){
+				debugger;
 				$scope.table = table;
 			});
 		}

@@ -8,7 +8,7 @@ var routes = require('./routes');
 var table = require('./routes/table');
 var api_user = require('./routes/api_user');
 var api_table = require('./routes/api_table');
-var pokerai = require('../addons/pokerai/build/Release/pokerai');
+global.pokerai = require('../addons/pokerai/build/Release/pokerai');
 var http = require('http');
 var path = require('path');
 
