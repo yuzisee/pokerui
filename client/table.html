@@ -20,6 +20,13 @@
         <p>State: {{table.state}}</p>
 
         <input ng-if="table.state=='WAITING'" type="button" ng-click="startGame()" value="Start">
+        <div ng-if="table.status.actionOn == user.id">
+          Bet Amount: <input type="text" ng-model="bet"> <input type="button" ng-click="placeBet(bet)" value="Bet">
+        </div>
+      </div>
+      <div>
+        
+        
       </div>
     </div>
   </body>

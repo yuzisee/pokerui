@@ -32,13 +32,18 @@ angular.module('pokerui', ['ngResource'])
 			});
 		});
 
+		$scope.hole_cards = [];
+		$scope.bet = 0;
 		$scope.tableId = window.location.pathname.split('/table/')[1];
 		(function tick() {
 			var table = Table.get(
 				{tableId: $scope.tableId}, 
 				function(table){
 					$scope.table = table;
-					$timeout(tick, 3000);
+					if($scope.table.state == "STARTED"){
+						// if(!$scope.hole_cards)
+					}
+					$timeout(tick, 5000);
 				});
 			}
 		)();
@@ -62,6 +67,10 @@ angular.module('pokerui', ['ngResource'])
 				debugger;
 				$scope.table = table;
 			});
+		}
+
+		$scope.placeBet = function(bet){
+			console.log(bet);
 		}
 	}
 );

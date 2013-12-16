@@ -8,7 +8,49 @@ var routes = require('./routes');
 var table = require('./routes/table');
 var api_user = require('./routes/api_user');
 var api_table = require('./routes/api_table');
-global.pokerai = require('../addons/pokerai/build/Release/pokerai');
+// global.pokerai = require('../addons/pokerai/build/Release/pokerai');
+global.randCard  = function(){
+	cards = ['s','h','c','d'];
+	return ""+Math.floor(Math.random()*9+1)+cards[Math.floor(Math.random()*3+1)];
+}
+
+global.pokerai = {
+	'startTable': function(f, chips, players){
+		chipsAtRound = {};
+		holeCards = {};
+		for(idx in players) {
+			player = players[idx];
+			chipsAtRound[player.id] = chips;
+			holeCards[player.id] = [global.randCard(), global.randCard()];
+		}
+
+		return {
+			players: players,
+			holeCards: holeCards,
+			startChips: chips,
+			hand: 0,
+			currentPlayer: 0,
+			dealer: 0,
+			community: [],
+			chipsAtRound: chipsAtRound
+		}
+	},
+
+	'getStatus': function(instance){
+		return {
+			hand: instance.hand,
+			actionOn: instance.players[instance.currentPlayer].id
+		}
+	},
+
+	'getActionSituation': function(instance, hand){
+		return {
+			dealer: instance.dealer,
+			community: instance.community,
+			chipsAtRound: instance.chipsAtRound
+		}
+	}
+}
 var http = require('http');
 var path = require('path');
 
@@ -59,9 +101,10 @@ app.get('/api/table/:tableid', api_table.getTable);
 app.post('/api/table/:tableid', api_table.updateTable);
 app.post('/api/table/:tableid/join', api_table.joinTable);
 app.post('/api/table/:tableid/startgame', api_table.startGame);
-app.get('/api/table/:tableid/status', api_table.getLiveStatus);
+app.get('/api/table/:tableid/status', api_table.getStatus);
+// app.get('/api/table/:tableid/hand/:handNum', api_table.getHand);
 app.post('/api/table/:tableid/hand/:handNum/actions', api_table.performAction);
-app.get('/api/table/:tableid/hand/:handNum/actions', api_table.getActionSituation);
+// app.get('/api/table/:tableid/hand/:handNum/actions', api_table.getActionSituation);
 app.get('/api/table/:tableid/hand/:handNum/outcome', api_table.getOutcome);
 app.get('/api/table/:tableid/hand/:handNum/seat/:seatNum/holecards', api_table.getHolecards);
 
