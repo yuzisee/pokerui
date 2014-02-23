@@ -7,7 +7,9 @@ exports.newTable = function(req, res, next){
         'totalSeats': global.pokerai.getMaxSeats(),
     };
 
-    req.session.lastTableId = tableId;
+    console.log('Created table ' + tableId);
+
+    //req.session.lastTableId = tableId; // Remember the last table you created in case you disconnect right there
     res.json(global.tables[tableId]);
 };
 

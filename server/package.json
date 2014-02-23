@@ -8,11 +8,12 @@
   },
   "dependencies": {
     "express": "3.4.5",
-    "bases": "~0.2.x"
+    "bases": "~0.2.x",
+    "lodash-node": "*"
   },
   "devDependencies" : {
     "mocha": "~1.17.x",
-    "should" : "~3.1.x",
-    "request" : "*"
+    "expect.js" : "~0.3.x",
+    "request" : "~2.34.x"
   }
 }

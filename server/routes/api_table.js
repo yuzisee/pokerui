@@ -21,13 +21,17 @@ exports.postAll = function(req, res){
 // 2. Update global.tables to mark that this table has an additional player
 exports.joinTable = function(req, res){
    var tableid = req.params.tableid;
+   console.log('joinTable()');
+   console.log(req.session);
+   console.log(global.users);
    if (tableid in global.users[req.session.username]['activeTables']) {
       console.log('You are already at this table. Can we indicate this somehow?');
    } else {
 
-      var seat = global.tables[tableid]['players'].length;
+      var table = global.tables[tableid];
+      var seat = table['players'].length;
 
-      if (seat >= global.tables[tableid]['totalSeats']) {
+      if (seat >= table['totalSeats']) {
          throw 'This table is full.';
       }
 
@@ -36,7 +40,7 @@ exports.joinTable = function(req, res){
       }
 
       global.users[req.session.username]['activeTables'][tableid] = {'seat': seat};
-      global.tables[tableid]['players'].push({
+      table['players'].push({
          "username": req.session.username,
          "seat": seat,
          "bot": false
