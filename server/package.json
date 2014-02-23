@@ -8,7 +8,6 @@
   },
   "dependencies": {
     "express": "3.4.5",
-    "bases": "~0.2.x",
     "lodash-node": "*"
   },
   "devDependencies" : {
