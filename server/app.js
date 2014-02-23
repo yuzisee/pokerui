@@ -78,29 +78,43 @@ if ('development' == app.get('env')) {
 
 
 // Global where we keep a list of all users
-global.users = [];
+global.users = {};
 // Routes to REST /api/user
-app.get('/api/userid', api_user.getUserId);
-app.get('/api/user', api_user.getAll);
-app.post('/api/user', api_user.postAll);
-app.get('/api/user/:userid', api_user.getUser);
-app.post('/api/user/:userid', api_user.updateUser);
-app.get('/api/user/:userid/active_tables', api_user.activeTables);
+app.get('/api/users', api_user.getAll);
+
+// Get the settings in your session cookie
+// Example:
+// {
+//   "username": "me@haha1212.com",
+//   "activeTables": {tableid: {"seat": 0}, ...}
+// }
+app.get('/api/session', api_user.getUser); 
+
+app.post('/api/login', api_user.updateUser); // For now, this stores your username (an e-mail address) into your session cookie
 
 
 // Routes to REST /api/table
 global.tables = {};
 app.get('/api/table', api_table.getAll);
 app.post('/api/table', table.newTable); // get a new (unused) tableId so you can start a table -- replaces /table/new
-app.get('/api/table/:tableid', api_table.getTable);
-app.post('/api/table/:tableid', api_table.updateTable); // ?
-app.post('/api/table/:tableid/join', api_table.joinTable); // Sit down at the table
-app.post('/api/table/:tableid/start_game', api_table.startGame); // Vote to start the game
 
-// Whose turn is it? Which hand are we on?
-// This GET call will give you at least the :handNum and :seatNum you need for the next section
+// Get the table state
+// Example:
+// {
+//   'id': tableId,
+//   'players': [{"username": "my@haha1212.com", "bot": false, "seat": 0}, ...], // Seated players
+//   'totalSeats': global.pokerai.getMaxSeats()
+// };
+//
+// If the game has started, the following fields are also included:
+//   "actionOn": {"currentHand": 2, "actionOn": 'me@haha1212.com'}
+// Use these to determine: Whose turn is it? Which hand are we on?
+// If the game has started, this GET call will give you at least the :handNum and :seatNum you need for the later sections
 // (e.g. enough to know who is next to POST to /api/table/:tableid/hand/:handNum/seat/:seatNum/action)
-app.get('/api/table/:tableid/action_on', api_table.getActionOn);
+app.get('/api/table/:tableid', api_table.getTable);
+app.post('/api/table/:tableid/join', api_table.joinTable); // Sit down at the table
+app.post('/api/table/:tableid/start_game', api_table.startGame); // Start the game. Any user can trigger this.
+
 
 app.get('/api/table/:tableid/hand/:handNum/actions', api_table.getActionSituation); // Get all actions so far, in hand handNum
 

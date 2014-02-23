@@ -5,7 +5,6 @@ exports.newTable = function(req, res, next){
         'id': tableId,
         'players': [], // Seated players
         'totalSeats': global.pokerai.getMaxSeats(),
-        'state' : 'WAITING'
     };
 
     req.session.lastTableId = tableId;

@@ -17,53 +17,97 @@ exports.postAll = function(req, res){
    // exports.getUser(req, res);
 };
 
+// 1. Update global.users to mark that this is now an active table for this user
+// 2. Update global.tables to mark that this table has an additional player
 exports.joinTable = function(req, res){
    var tableid = req.params.tableid;
-    global.tables[tableid]['players'][req.session.userid] = {
-       id : req.session.userid,
-       name : req.session.name,
-       bot: false
-    };
-   res.json(global.tables[tableid]);
+   if (tableid in global.users[req.session.username]['activeTables']) {
+      console.log('You are already at this table. Can we indicate this somehow?');
+   } else {
+
+      var seat = global.tables[tableid]['players'].length;
+
+      if (seat >= global.tables[tableid]['totalSeats']) {
+         throw 'This table is full.';
+      }
+
+      if ('instance' in table) {
+         throw 'This table has already started playing. You cannot join after the fact, sorry!';
+      }
+
+      global.users[req.session.username]['activeTables'][tableid] = {'seat': seat};
+      global.tables[tableid]['players'].push({
+         "username": req.session.username,
+         "seat": seat,
+         "bot": false
+      });
+   }
+   exports.getTable(req, res);
 };
 
 exports.getTable = function(req, res){
-   tableid = req.params.tableid;
-   table = global.tables[tableid];
+   var tableid = req.params.tableid;
+   var table = global.tables[tableid];
    
-   if(table.state != "WAITING"){
-      global.tables[tableid]['status'] = global.pokerai.getStatus(table['instance']);
+   if('instance' in table){
+      global.tables[tableid]['actionOn'] = global.pokerai.getActionOn(table['instance']);
    }
 
    res.json(table);
 }
 
-exports.updateTable = function(req, res){
-   // userid = req.params.userid;
-   // req.session.name = req.body.name;
-   // exports.getUser(req, res)
-};
-
 exports.startGame = function(req, res){
-   // TODO(from yuzisee): What happens if you call startGame twice? We must make sure we don't do that.
    var tableid = req.params.tableid;
-   // console.log(global.tables[tableid]['players']);
-   players = [];
-   for(userid in global.tables[tableid]['players']){
-      players.push(global.tables[tableid]['players'][userid]);
+   var table = global.tables[tableid];
+
+   // What happens if you call startGame twice? We must make sure we don't do that.
+   if('instance' in table) {
+      throw 'Table already started. Ignoring request to start game again.';
    }
 
-   var pokeraiInstance = global.pokerai.startTable(tableid + '.txt', 1500, players);
+   // console.log(global.tables[tableid]['players']);
+
+// global.tables[tableid] has the following form:
+// {
+//   'id': tableId,
+//   'players': [{"username": "my@haha1212.com", "bot": false, "seat": 0}, ...], // Seated players
+//   'totalSeats': global.pokerai.getMaxSeats()
+// };
+   var startTablePlayers = [];
+   for(var i=0; i<table['totalSeats']; ++i) {
+      if (i<table['players'].length) {
+         var p = table['players'][i];
+         startTablePlayers.push({'id': p['username'], 'bot': p['bot']});
+      } else {
+         startTablePlayers.push(null);
+      }
+   }
+// global.startTable expects the following players array:
+// [
+//   {'id': 'playerId1', 'bot': false}
+//   ,
+//   {'id': 'playerId2', 'bot': true}
+//   ,
+//   {'id': 'playerId3', 'bot': false}
+//   ,
+//   null
+//   ,
+//   null
+//   ,
+//   ...
+// ]
+   var STARTING_CHIPS = 1500;
+   var pokeraiInstance = global.pokerai.startTable(tableid + '.logs', STARTING_CHIPS, startTablePlayers);
    global.tables[tableid]['instance'] = pokeraiInstance;
    // TODO(from yuzisee): You have to call pokeraiInstance.shutdownTable() at some point to save state, etc.
 
-   var status = global.pokerai.getStatus(pokeraiInstance);
+   var actionOn = global.pokerai.getActionOn(pokeraiInstance);
 
-   var actionSituation = global.pokerai.getActionSituation(pokeraiInstance, status['hand']);
+   var actionSituation = global.pokerai.getActionSituation(pokeraiInstance, actionOn['currentHand']);
 
    // Initialize action situation
    global.tables[tableid]['hand'] = [];
-   global.tables[tableid]['status'] = status;
+   global.tables[tableid]['actionOn'] = actionOn;
    global.tables[tableid]['hand'][0] = 
    {   
       'bets': [],
@@ -77,12 +121,6 @@ exports.startGame = function(req, res){
    exports.getTable(req, res);
 };
 
-exports.getActionOn = function(req, res){
-   var tableid = req.params.tableid;
-   var pokeraiInstance = global.tables[tableid]['instance'];
-
-   res.json(global.pokerai.getStatus(pokeraiInstance))
-};
 
 // exports.getHand = function(req, res) {
 //    var tableid = req.params.tableid;
@@ -102,7 +140,7 @@ exports.getHolecards = function(req, res) {
    var seatNum = req.params.seatNum;
    var pokeraiInstance = global.tables[tableid]['instance'];
 
-   var currentHandNum = global.pokerai.getStatus(pokeraiInstance).currentHand;
+   var currentHandNum = global.pokerai.getActionOn(pokeraiInstance).currentHand;
    if(currentHandNum != handNum){
       throw "Handnum doesn't match";
    }
@@ -117,7 +155,7 @@ exports.performAction = function(req, res){
    var handNum = req.params.handNum;
    var pokeraiInstance = global.tables[tableid]['instance'];
 
-   var currentHandNum = global.pokerai.getStatus(pokeraiInstance).currentHand;
+   var currentHandNum = global.pokerai.getActionOn(pokeraiInstance).currentHand;
    if(handNum != currentHandNum) throw "Hand not current hand!";
 
    var actionRequested = req.body;
