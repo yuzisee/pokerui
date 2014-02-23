@@ -134,13 +134,13 @@ exports.startGame = function(req, res){
 //    res.json(global.tables[tableid]['hand'][handNum]);
 // };
 
-exports.getOutcome = function(req, res) {
+function getOutcome(req, res) {
    var tableid = req.params.tableid;
    var handNum = req.params.handNum;
    res.json(global.tables[tableid]['hand'][handNum]['outcome']);
 };
 
-exports.getHolecards = function(req, res) {
+function getHolecards(req, res) {
    var tableid = req.params.tableid;
    var handNum = req.params.handNum;
    var seatNum = req.params.seatNum;
@@ -154,6 +154,18 @@ exports.getHolecards = function(req, res) {
 
    res.json(global.pokerai.getHoleCards(pokeraiInstance, seatNum));
 };
+
+function getActionSituation(req, res){
+
+    var tableid = req.params.tableid;
+    var handNum = req.params.handNum;
+
+    res.json(global.tables[tableid]['hand'][handNum]['actionSituation'])
+};
+
+exports.getStatus = function(req, res){
+    res.json({})
+}
 
 exports.performAction = function(req, res){
 
@@ -187,13 +199,5 @@ exports.performAction = function(req, res){
    console.log('Bet request amount=' + requestedBetAmount + " actual=" + actionTaken.adjustedBetTo);
 
    res.json(actionTaken)
-};
-
-exports.getActionSituation = function(req, res){
-
-    var tableid = req.params.tableid;
-    var handNum = req.params.handNum;
-
-    res.json(global.tables[tableid]['hand'][handNum]['actionSituation'])
 };
 

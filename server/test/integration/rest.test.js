@@ -126,11 +126,31 @@ describe('end-to-end test of the full REST API', function(){
      });
   });
 
+
+  var handnum;
   it("should all run smoothly if player 2 starts the game", function(done){
      request.post(LOCAL_SERVER_URL + 'api/table/' + tableId + '/start_game', {jar:cookieJarP2}, function(err,resp,body){
        expect(resp.statusCode).to.eql(200);
-       console.log(body);
+       var responseBody = JSON.parse(body);
+       // Verify that the game has started.
+       handnum = responseBody['actionOn']['currentHand']
+       expect(handnum).to.be.a('number');
+       expect(responseBody['actionOn']['actionOn']).to.eql(TEST_USERNAME);
        done();
+     });
+  });
+
+  it("should show a fresh table with the same number of chips to all players", function(done){
+     // P1
+     request.get(LOCAL_SERVER_URL + 'api/table/' + tableId, {jar:cookieJar}, function(err,resp,body){
+       expect(resp.statusCode).to.eql(200);
+       // Verify that the game shows started for P2 as well
+       var responseBody = JSON.parse(body);
+       expect(responseBody['actionOn']).to.eql({'currentHand': handnum, 'actionOn': TEST_USERNAME});
+       request.get(LOCAL_SERVER_URL + 'api/table/' + tableId + '/hand/' + handnum, {jar:cookieJar}, function(err,resp,body){
+         
+         done();
+       });
      });
   });
 

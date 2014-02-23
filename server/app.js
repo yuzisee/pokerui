@@ -98,7 +98,7 @@ app.post('/api/login', api_user.updateUser); // For now, this stores your userna
 // Routes to REST /api/table
 global.tables = {};
 app.get('/api/table', api_table.getAll);
-app.post('/api/table', table.newTable); // get a new (unused) tableId so you can start a table -- replaces /table/new
+app.post('/api/table', table.newTable); // create a new (unused) tableId so you can start a table
 
 // Get the table state
 // Example:
@@ -114,20 +114,21 @@ app.post('/api/table', table.newTable); // get a new (unused) tableId so you can
 // If the game has started, this GET call will give you at least the :handNum and :seatNum you need for the later sections
 // (e.g. enough to know who is next to POST to /api/table/:tableid/hand/:handNum/seat/:seatNum/action)
 app.get('/api/table/:tableid', api_table.getTable);
+
 app.post('/api/table/:tableid/join', api_table.joinTable); // Sit down at the table
 app.post('/api/table/:tableid/start_game', api_table.startGame); // Start the game. Any user can trigger this.
+app.post('/api/table/:tableid/action', api_table.performAction); // try performing an action -- the server will tell you what action you were actually allowed to take (accounting for minRaise, etc.)
 
+// Gets actionSituation, holeCards, and outcome for a hand, if available.
+// Example:
+// {
+//   handNum: 5,
+//   holecards: {...},
+//   actions: {...},
+//   outcome: {...}
+// }
+app.get('/api/table/:tableid/hand/:handNum', api_table.getStatus);
 
-app.get('/api/table/:tableid/hand/:handNum/actions', api_table.getActionSituation); // Get all actions so far, in hand handNum
-
-app.post('/api/table/:tableid/hand/:handNum/seat/:seatNum/action', api_table.performAction); // try performing an action -- the server will tell you what action you were actually allowed to take (accounting for minRaise, etc.)
-app.get('/api/table/:tableid/hand/:handNum/seat/:seatNum/holecards', api_table.getHolecards);
-app.get('/api/table/:tableid/hand/:handNum/outcome', api_table.getOutcome);
-
-
-// This is just a summary of /api/table/:tableid/hand/:handNum/actions, which you could get in a loop...
-// app.get('/api/table/:tableid/hand/:handNum', api_table.getHand);
-// ...but nowadays 
 
 
 http.createServer(app).listen(app.get('port'), function(){
