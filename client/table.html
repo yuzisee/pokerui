@@ -1,0 +1,33 @@
+<html ng-app="pokerui">
+  <head>
+    <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.2.3/angular.min.js"></script>
+    <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.2.3/angular-resource.js"></script>
+    <script src="/client/table.js"></script>
+  </head>
+  <body>
+    <div ng-controller="PkTable">
+      <div>
+        <h1>{{user.name}} on Table: {{table.id}} <input ng-if="table" type="button" ng-click="joinTable()" value="Join"></h1>
+        <label>Name:</label>
+        <input type="text" ng-model="user.name" placeholder="Enter a name here">
+        <input type="button" ng-click="saveUser(user)" value="Save">
+      </div>
+      <div>
+        Players:
+          <!-- <ul> -->
+            <li ng-repeat="player in table.players">{{player.name}}</li>
+          <!-- </ul> -->
+        <p>State: {{table.state}}</p>
+
+        <input ng-if="table.state=='WAITING'" type="button" ng-click="startGame()" value="Start">
+        <div ng-if="table.status.actionOn == user.id">
+          Bet Amount: <input type="text" ng-model="bet"> <input type="button" ng-click="placeBet(bet)" value="Bet">
+        </div>
+      </div>
+      <div>
+        
+        
+      </div>
+    </div>
+  </body>
+</html>
