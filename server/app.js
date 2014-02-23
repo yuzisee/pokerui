@@ -32,14 +32,14 @@ global.pokerai = {
 			dealer: 0,
 			community: [],
 			chipsAtRound: chipsAtRound
-		}
+		};
 	},
 
 	'getActionOn': function(instance){
 		return {
 			hand: instance.hand,
 			actionOn: instance.players[instance.currentPlayer].id
-		}
+		};
 	},
 
 	'getActionSituation': function(instance, hand){
@@ -47,7 +47,11 @@ global.pokerai = {
 			dealer: instance.dealer,
 			community: instance.community,
 			chipsAtRound: instance.chipsAtRound
-		}
+		};
+	},
+
+	'getMaxSeats': function() {
+		return 10;
 	}
 }
 var http = require('http');

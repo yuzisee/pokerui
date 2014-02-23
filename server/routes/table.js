@@ -1,14 +1,15 @@
 
 exports.newTable = function(req, res, next){
-    tableId = randomStr(5);
+    var tableId = randomStr(5);
     global.tables[tableId] = {
         'id': tableId,
-        'players': {},
+        'players': [], // Seated players
+        'totalSeats': global.pokerai.getMaxSeats(),
         'state' : 'WAITING'
     };
 
     req.session.lastTableId = tableId;
-    res.redirect('/table/'+tableId);
+    res.json(global.tables[tableId]);
 };
 
 var bases = require('bases');

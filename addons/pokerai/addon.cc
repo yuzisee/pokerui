@@ -1178,6 +1178,27 @@ v8::Handle<v8::Value> GetBotAction(const v8::Arguments& args) {
 
 
 
+// Get the compiled constant SEATS_AT_TABLE
+// To change this value we have to re-compile the Node addon.
+v8::Handle<v8::Value> GetMaxSeats(const v8::Arguments& args) {
+  v8::HandleScope scope;
+
+  // === Validate arguments
+
+  if (args.Length() != 0) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Wrong number of arguments")));
+    return scope.Close(v8::Undefined());
+  }
+
+  // === Return result
+
+  return scope.Close(v8::Uint32::New(SEATS_AT_TABLE));
+
+}
+
+
+
+
 
 
 
@@ -1302,6 +1323,14 @@ void Init(v8::Handle<v8::Object> exports) {
 */
   exports->Set(v8::String::NewSymbol("getBotAction"),
      v8::FunctionTemplate::New(GetBotAction)->GetFunction());
+
+/*
+  pokerai.exports.getMaxSeats()
+  Actual response:
+    10
+*/
+  exports->Set(v8::String::NewSymbol("getMaxSeats"),
+     v8::FunctionTemplate::New(MaxSeats)->GetFunction());
 
 }
 
