@@ -77,7 +77,7 @@ exports.startGame = function(req, res){
 	exports.getTable(req, res);
 };
 
-exports.getStatus = function(req, res){
+exports.getActionOn = function(req, res){
 	var tableid = req.params.tableid;
 	var pokeraiInstance = global.tables[tableid]['instance'];
 

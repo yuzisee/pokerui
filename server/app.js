@@ -89,13 +89,13 @@ app.get('/api/table', api_table.getAll);
 app.get('/api/table/:tableid', api_table.getTable);
 app.post('/api/table/:tableid', api_table.updateTable);
 app.post('/api/table/:tableid/join', api_table.joinTable);
-app.post('/api/table/:tableid/startgame', api_table.startGame);
+app.post('/api/table/:tableid/start_game', api_table.startGame);
 app.get('/api/table/:tableid/action_on', api_table.getActionOn);
 // app.get('/api/table/:tableid/hand/:handNum', api_table.getHand);
-app.post('/api/table/:tableid/hand/:handNum/actions', api_table.performAction);
 // app.get('/api/table/:tableid/hand/:handNum/actions', api_table.getActionSituation);
-app.get('/api/table/:tableid/hand/:handNum/outcome', api_table.getOutcome);
+app.post('/api/table/:tableid/hand/:handNum/seat/:seatNum/action', api_table.performAction);
 app.get('/api/table/:tableid/hand/:handNum/seat/:seatNum/holecards', api_table.getHolecards);
+app.get('/api/table/:tableid/hand/:handNum/outcome', api_table.getOutcome);
 
 http.createServer(app).listen(app.get('port'), function(){
   console.log('Express server listening on port ' + app.get('port'));
