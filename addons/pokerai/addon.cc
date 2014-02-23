@@ -1330,7 +1330,7 @@ void Init(v8::Handle<v8::Object> exports) {
     10
 */
   exports->Set(v8::String::NewSymbol("getMaxSeats"),
-     v8::FunctionTemplate::New(MaxSeats)->GetFunction());
+     v8::FunctionTemplate::New(GetMaxSeats)->GetFunction());
 
 }
 

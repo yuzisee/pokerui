@@ -83,7 +83,8 @@ exports.startGame = function(req, res){
          var p = table['players'][i];
          startTablePlayers.push({'id': p['username'], 'bot': p['bot']});
       } else {
-         startTablePlayers.push(null);
+         //TODO(from yuzisee): It looks like we don't actually expect the nulls anymore? See addon.cc
+         //startTablePlayers.push(null);
       }
    }
 // global.startTable expects the following players array:
@@ -100,6 +101,7 @@ exports.startGame = function(req, res){
 //   ,
 //   ...
 // ]
+   console.log(startTablePlayers);
    var STARTING_CHIPS = 1500;
    var pokeraiInstance = global.pokerai.startTable(tableid + '.logs', STARTING_CHIPS, startTablePlayers);
    global.tables[tableid]['instance'] = pokeraiInstance;

@@ -111,7 +111,7 @@ describe('end-to-end test of the full REST API', function(){
 
   it("should allow a second player to sit at the same table", function(done){
         
-     request.post(LOCAL_SERVER_URL + 'api/table/' + tableId + '/join', {form:{'username': TEST_USERNAME2}, jar:cookieJarP2}, function(err,resp,body){
+     request.post(LOCAL_SERVER_URL + 'api/table/' + tableId + '/join', {jar:cookieJarP2}, function(err,resp,body){
         expect(resp.statusCode).to.eql(200);
         var responseBody = JSON.parse(body);
         expect(tableId).to.be(responseBody['id']); // We should get back the same tableId we requested
@@ -123,6 +123,14 @@ describe('end-to-end test of the full REST API', function(){
               {'username': TEST_USERNAME2, 'bot': false, 'seat': 1}
            ]); // ... and now we're both sitting at it!
         done();
+     });
+  });
+
+  it("should all run smoothly if player 2 starts the game", function(done){
+     request.post(LOCAL_SERVER_URL + 'api/table/' + tableId + '/start_game', {jar:cookieJarP2}, function(err,resp,body){
+       expect(resp.statusCode).to.eql(200);
+       console.log(body);
+       done();
      });
   });
 

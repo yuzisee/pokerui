@@ -7,7 +7,8 @@ var express = require('express');
 var table = require('./routes/table');
 var api_user = require('./routes/api_user');
 var api_table = require('./routes/api_table');
-// global.pokerai = require('../addons/pokerai/build/Release/pokerai');
+global.pokerai = require('../addons/pokerai/build/Release/pokerai');
+/*
 global.randCard  = function(){
 	cards = ['s','h','c','d'];
 	return ""+Math.floor(Math.random()*9+1)+cards[Math.floor(Math.random()*3+1)];
@@ -54,6 +55,7 @@ global.pokerai = {
 		return 10;
 	}
 }
+*/
 var http = require('http');
 var path = require('path');
 
