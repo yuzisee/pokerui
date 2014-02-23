@@ -126,8 +126,8 @@ exports.performAction = function(req, res){
 	actionRequested.amount = actionTaken.adjustedBetTo;
 
 	global.tables[tableid]['hand'][handNum]['actionSituation']['bets'].push(actionRequested);
-	if (pokeraiAction['checkpoint']) {
-		global.tables[tableid]['hand'][handNum]['actionSituation']['bets'].push({'checkpoint': pokeraiAction.checkpoint});
+	if (actionTaken['checkpoint']) {
+		global.tables[tableid]['hand'][handNum]['actionSituation']['bets'].push({'checkpoint': actionTaken.checkpoint});
 
 		var actionSituation = global.pokerai.getActionSituation(pokeraiInstance, handNum);
 		var chipCounts = actionSituation.chipCountsSinceCheckpoint;
@@ -135,12 +135,21 @@ exports.performAction = function(req, res){
 		global.tables[tableid]['hand'][handNum]['actionSituation']['chipCountsSinceCheckpoint'] = chipCounts;
 		global.tables[tableid]['hand'][handNum]['actionSituation']['communitySoFar'] = actionSituation.communitySoFar;
 
-		if (pokeraiAction['checkpoint'] == 'showdown') {
+		if (actionTaken['checkpoint'] == 'showdown') {
 			global.tables[tableid]['hand'][handNum]['outcome'] = global.pokerai.getOutcome(pokeraiInstance, handNum);
 		}
 	}
 
 	console.log('Bet request amount=' + requestedBetAmount + " actual=" + actionTaken.adjustedBetTo);
 
-	res.json(pokeraiAction)
+	res.json(actionTaken)
 };
+
+exports.getActionSituation = function(req, res){
+
+    var tableid = req.params.tableid;
+    var handNum = req.params.handNum;
+
+    res.json(global.tables[tableid]['hand'][handNum]['actionSituation'])
+};
+

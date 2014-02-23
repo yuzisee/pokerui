@@ -46,3 +46,11 @@ exports.updateUser = function(req, res){
 	req.session.name = req.body.name;
 	exports.getUser(req, res)
 };
+
+// What table am I currently sitting at?
+// (e.g. if you disconnect and reconnect, using your session ID we should know which tables you need to reconnect to)
+exports.activeTables = function(req, res, next){
+        res.json([req.session.lastTableId]);
+};
+
+

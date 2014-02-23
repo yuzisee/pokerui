@@ -38,8 +38,6 @@ app.get('/', routes.index);
 // Global where we keep a list of all users
 
 // Routes to NON-REST /table
-app.get('/table', table.table);
-app.get('/table/new', table.newTable);
 app.get('/table/:tableid', table.loadTable);
 
 http.createServer(app).listen(app.get('port'), function(){

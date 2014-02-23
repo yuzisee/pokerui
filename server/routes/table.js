@@ -1,12 +1,4 @@
 
-exports.table = function(req, res, next){
-    if(req.session.lastTableId) {
-        res.redirect('/table/'+req.session.lastTableId);
-    } else {
-        exports.newTable(req, res, next);
-    }
-};
-
 exports.newTable = function(req, res, next){
     tableId = randomStr(5);
     global.tables[tableId] = {
@@ -18,6 +10,7 @@ exports.newTable = function(req, res, next){
     req.session.lastTableId = tableId;
     res.redirect('/table/'+tableId);
 };
+
 var bases = require('bases');
 var crypto = require('crypto');
  
