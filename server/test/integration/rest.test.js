@@ -11,6 +11,7 @@ LOCAL_SERVER_URL = 'http://localhost:3000/';
 
  
 TEST_USERNAME = crypto.randomBytes(2).toString('hex') + '@' + crypto.randomBytes(4).toString('hex') + '.com';
+TEST_USERNAME2 = crypto.randomBytes(2).toString('hex') + '@' + crypto.randomBytes(4).toString('hex') + '.com';
 
 describe('end-to-end test of the full REST API', function(){
   // Use one cookie jar for the entire test
@@ -39,29 +40,31 @@ describe('end-to-end test of the full REST API', function(){
   });
 
   var lastExpectedSessionState;
+  var tableId;
+  var totalSeats;
 
   it("should create a new table and let me sit at it, while updating my activeTables list", function(done){
     request.post(LOCAL_SERVER_URL + 'api/table', {jar:cookieJar}, function(err,resp,body){
       expect(resp.statusCode).to.eql(200);
       var responseBody = JSON.parse(body);
-      var tableid = responseBody['id'];
-      var totalSeats = responseBody['totalSeats'];
-      expect(tableid).to.be.a('string'); // We get a valid table id
-      console.log('tableid = ' + tableid);
-      expect(tableid).to.have.length(8); // The table id has a correct length
+      totalSeats = responseBody['totalSeats'];
+      tableId = responseBody['id'];
+      expect(tableId).to.be.a('string'); // We get a valid table id
+      console.log('tableId = ' + tableId);
+      expect(tableId).to.have.length(8); // The table id has a correct length
       expect(responseBody).to.have.property('players'); // The table has a players list...
       expect(responseBody['players']).to.have.length(0); // ... but no seated players yet
       expect(totalSeats > 2).to.be.ok(); // Some valid number of seats
 
       console.log("Okay, let's sit at this table");
-      request.post(LOCAL_SERVER_URL + 'api/table/' + tableid + '/join', {jar:cookieJar}, function(err,resp,body){
+      request.post(LOCAL_SERVER_URL + 'api/table/' + tableId + '/join', {jar:cookieJar}, function(err,resp,body){
         expect(resp.statusCode).to.eql(200);
         console.log(body);
         var responseBody = JSON.parse(body);
-        expect(tableid).to.be(responseBody['id']); // We should get back the same tableid we requested
+        expect(tableId).to.be(responseBody['id']); // We should get back the same tableId we requested
         expect(totalSeats).to.be(responseBody['totalSeats']); // We should get back the same totalSeats as before
         expect(responseBody).to.have.property('players'); // The table has a players list...
-        expect(responseBody['players']).to.eql([{'username': TEST_USERNAME, 'bot': false, 'seat': 0}]); // ... and now we're setting at it!
+        expect(responseBody['players']).to.eql([{'username': TEST_USERNAME, 'bot': false, 'seat': 0}]); // ... and now we're sitting at it!
 
         console.log("Okay, so did our user's activeTables get updated?");
         request.get(LOCAL_SERVER_URL + 'api/session', {jar:cookieJar}, function(err,resp,body){
@@ -69,7 +72,7 @@ describe('end-to-end test of the full REST API', function(){
            console.log(body);
            var responseBody = JSON.parse(body);
            lastExpectedSessionState = {'username': TEST_USERNAME, 'activeTables': {}};
-           lastExpectedSessionState['activeTables'][tableid] = {'seat': 0};
+           lastExpectedSessionState['activeTables'][tableId] = {'seat': 0};
            expect(responseBody).to.eql(lastExpectedSessionState); // Even if we disconnect at this point we can find this table again (and which seat we're in)
            done();
         });
@@ -89,6 +92,36 @@ describe('end-to-end test of the full REST API', function(){
         //console.log(responseBody);
         expect(responseBody['username']).to.eql(TEST_USERNAME); // The server has picked up our username
         expect(responseBody).to.eql(lastExpectedSessionState); // We disconnected, and it still got us back
+        done();
+     });
+  });
+
+  var cookieJarP2 = request.jar(); // Separate cookie for the second player
+  it("should allow a second player to log in", function(done){
+     request.post(LOCAL_SERVER_URL + 'api/login', {form:{'username': TEST_USERNAME2}, jar:cookieJarP2}, function(err,resp,body){
+        expect(resp.statusCode).to.eql(200);
+        var responseBody = JSON.parse(body);
+        //console.log(resp);
+        //console.log(responseBody);
+        expect(responseBody['username']).to.eql(TEST_USERNAME2); // The server has picked up our username
+        expect(responseBody['activeTables']).to.eql({}); // We have no active tables yet, of course.
+        done();
+     });
+  });
+
+  it("should allow a second player to sit at the same table", function(done){
+        
+     request.post(LOCAL_SERVER_URL + 'api/table/' + tableId + '/join', {form:{'username': TEST_USERNAME2}, jar:cookieJarP2}, function(err,resp,body){
+        expect(resp.statusCode).to.eql(200);
+        var responseBody = JSON.parse(body);
+        expect(tableId).to.be(responseBody['id']); // We should get back the same tableId we requested
+        expect(totalSeats).to.be(responseBody['totalSeats']); // We should get back the same totalSeats as always
+        expect(responseBody).to.have.property('players'); // The table has a players list...
+        expect(responseBody['players']).to.eql([
+              {'username': TEST_USERNAME, 'bot': false, 'seat': 0}
+              ,
+              {'username': TEST_USERNAME2, 'bot': false, 'seat': 1}
+           ]); // ... and now we're both sitting at it!
         done();
      });
   });
