@@ -4,7 +4,6 @@
  */
 
 var express = require('express');
-var routes = require('./routes');
 var table = require('./routes/table');
 var api_user = require('./routes/api_user');
 var api_table = require('./routes/api_table');
@@ -36,7 +35,7 @@ global.pokerai = {
 		}
 	},
 
-	'getStatus': function(instance){
+	'getActionOn': function(instance){
 		return {
 			hand: instance.hand,
 			actionOn: instance.players[instance.currentPlayer].id
@@ -73,8 +72,7 @@ if ('development' == app.get('env')) {
   app.use(express.errorHandler());
 }
 
-// Naked domain!
-app.get('/', routes.index);
+
 // Global where we keep a list of all users
 global.users = [];
 // Routes to REST /api/user
@@ -84,10 +82,6 @@ app.post('/api/user', api_user.postAll);
 app.get('/api/user/:userid', api_user.getUser);
 app.post('/api/user/:userid', api_user.updateUser);
 
-// Routes to NON-REST /table
-app.get('/table', table.table);
-app.get('/table/new', table.newTable);
-app.get('/table/:tableid', table.loadTable);
 
 // Routes to REST /api/table
 global.tables = {};
@@ -96,7 +90,7 @@ app.get('/api/table/:tableid', api_table.getTable);
 app.post('/api/table/:tableid', api_table.updateTable);
 app.post('/api/table/:tableid/join', api_table.joinTable);
 app.post('/api/table/:tableid/startgame', api_table.startGame);
-app.get('/api/table/:tableid/status', api_table.getStatus);
+app.get('/api/table/:tableid/action_on', api_table.getActionOn);
 // app.get('/api/table/:tableid/hand/:handNum', api_table.getHand);
 app.post('/api/table/:tableid/hand/:handNum/actions', api_table.performAction);
 // app.get('/api/table/:tableid/hand/:handNum/actions', api_table.getActionSituation);

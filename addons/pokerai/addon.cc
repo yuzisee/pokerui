@@ -370,7 +370,7 @@ v8::Handle<v8::Value> GetActionSituation(const v8::Arguments& args) {
 }
 
 
-v8::Handle<v8::Value> GetStatus(const v8::Arguments& args) {
+v8::Handle<v8::Value> GetActionOn(const v8::Arguments& args) {
   v8::HandleScope scope;
 
   // === Validate arguments
@@ -639,15 +639,15 @@ void Init(v8::Handle<v8::Object> exports) {
      v8::FunctionTemplate::New(GetActionSituation)->GetFunction());
 
 /*
-  pokerai.exports.getStatus({ 'id': <onDiskId>, '_instance': <instanceHandle> })
+  pokerai.exports.getActionOn({ 'id': <onDiskId>, '_instance': <instanceHandle> })
   JSON Response:
   {
     'currentHand': 4,
     'actionOn': <playerId>
   }
 */
-  exports->Set(v8::String::NewSymbol("getStatus"),
-     v8::FunctionTemplate::New(GetStatus)->GetFunction());
+  exports->Set(v8::String::NewSymbol("getActionOn"),
+     v8::FunctionTemplate::New(GetActionOn)->GetFunction());
 
  
 /*

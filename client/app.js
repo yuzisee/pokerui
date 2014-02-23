@@ -5,6 +5,7 @@
 
 var express = require('express');
 var routes = require('./routes');
+var table = require('./routes/table');
 var http = require('http');
 var path = require('path');
 
@@ -35,6 +36,11 @@ if ('development' == app.get('env')) {
 // Naked domain!
 app.get('/', routes.index);
 // Global where we keep a list of all users
+
+// Routes to NON-REST /table
+app.get('/table', table.table);
+app.get('/table/new', table.newTable);
+app.get('/table/:tableid', table.loadTable);
 
 http.createServer(app).listen(app.get('port'), function(){
   console.log('Express server listening on port ' + app.get('port'));
