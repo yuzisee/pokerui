@@ -5,6 +5,7 @@ exports.newTable = function(req, res, next){
         'id': tableId,
         'players': [], // Seated players
         'totalSeats': global.pokerai.getMaxSeats(),
+        'hands' = []
     };
 
     console.log('Created table ' + tableId);

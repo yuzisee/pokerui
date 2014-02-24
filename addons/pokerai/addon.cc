@@ -14,6 +14,8 @@
 #include "holdem/src/arenaEvents.h"
 
 static const double CHIP_DENOM = 0.01; // Minimum bet denomination
+static const double STARTING_SMALL_BLIND = CHIP_DENOM;
+static const double STARTING_BIG_BLIND = 2 * STARTING_SMALL_BLIND;
 
 struct PokerAiReveal {
   std::string playerName;
@@ -408,6 +410,7 @@ public:
   ,
   fTable(CHIP_DENOM, true, true)
   {
+    fBl.SetSmallBigBlind(STARTING_SMALL_BLIND);
   }
 
   ~PokerAiInstance() {
@@ -501,6 +504,9 @@ public:
 
   double getBotAction(playernumber_t seatNum) { return fTable.GetBetDecision(seatNum); }
 
+  const struct HoldemBet &getSmallBlindBet() const { return fTable.GetThisRoundSmallBlind(); }
+  const struct HoldemBet &getBigBlindBet() const { return fTable.GetThisRoundBigBlind(); }
+
   const std::string fOnDiskId;
 private:
   std::ofstream fGamelog;
@@ -508,14 +514,12 @@ private:
   HoldemArena fTable;
   PokerAiRoundSetup fTableRound;
   PokerAiShowdown fLastShowdown;
+  BlindValues fBl;
 
 
   bool startHandImpl() {
-    BlindValues bl;
-    bl.SetSmallBigBlind(5.0);
     // TODO(from yuzisee): Create a new HoldemArena every time?
-    
-    return fTableRound.startNewHand(fTable.handnum, fTable, bl, fGamelog);
+    return fTableRound.startNewHand(fTable.handnum, fTable, fBl, fGamelog);
   }
 
 
@@ -1197,6 +1201,63 @@ v8::Handle<v8::Value> GetMaxSeats(const v8::Arguments& args) {
 }
 
 
+// Get the blind bets this round
+v8::Handle<v8::Value> GetBlindBets(const v8::Arguments& args) {
+  v8::HandleScope scope;
+
+
+  // === Validate arguments
+
+  if (args.Length() != 1) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("Wrong number of arguments")));
+    return scope.Close(v8::Undefined());
+  }
+
+  // === Read arguments
+
+  const PokerAiInstance * const table = readFirstArgumentAsTable(args);
+
+  if (!table) {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("First argument must be a object containg .id (must be a string) and ._instance (must be an array of uint32 values)")));
+    return scope.Close(v8::Undefined());
+  }
+
+  // === Return result
+
+  v8::Handle<v8::Object> smallBlind = v8::Object::New();
+  v8::Handle<v8::Object> bigBlind = v8::Object::New();
+
+  const struct HoldemBet &smallBlindBet = table->getSmallBlindBet();
+  if (smallBlindBet.IsPostBlind()) {
+    smallBlind->Set(v8::String::NewSymbol("seat"), v8::Uint32::New(smallBlindBet.myPlayerIndex));
+    smallBlind->Set(v8::String::NewSymbol("username"), v8::String::New(smallBlindBet.myPlayerName.c_str()));
+    smallBlind->Set(v8::String::NewSymbol("amount"), v8::Number::New(smallBlindBet.bet));
+    smallBlind->Set(v8::String::NewSymbol("action"), v8::String::New("smallBlind"));
+  } else {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("No blind bet yet this hand. Are you sure you started?")));
+    return scope.Close(v8::Undefined());
+  }
+  const struct HoldemBet &bigBlindBet = table->getBigBlindBet();
+  if (bigBlindBet.IsPostBlind()) {
+    bigBlind->Set(v8::String::NewSymbol("seat"), v8::Uint32::New(bigBlindBet.myPlayerIndex));
+    bigBlind->Set(v8::String::NewSymbol("username"), v8::String::New(bigBlindBet.myPlayerName.c_str()));
+    bigBlind->Set(v8::String::NewSymbol("amount"), v8::Number::New(bigBlindBet.bet));
+    bigBlind->Set(v8::String::NewSymbol("action"), v8::String::New("bigBlind"));
+  } else {
+    v8::ThrowException(v8::Exception::TypeError(v8::String::New("No big blind found (but small blind was ok?) There must be a logic bug somehwere.")));
+    return scope.Close(v8::Undefined());
+  }
+
+  v8::Local<v8::Array> result = v8::Array::New(2);
+
+  result->Set(0, smallBlind);
+  result->Set(1, bigBlind);
+
+  return scope.Close(result);
+
+}
+
+
 
 
 
@@ -1245,26 +1306,6 @@ void Init(v8::Handle<v8::Object> exports) {
 
  
 /*
-  Ideal HTTP GET "hand history"
-  JSON Response:
-  {
-    'bets': [
-            {'_playerId': 'Nav', '_seatNumber': 0, '_action': 'smallBlind', 'amount': 5.0},
-            {'_playerId': 'Joseph', '_seatNumber': 0, '_action': 'bigBlind', 'amount': 10.0},
-            {'_playerId': 'bot1', '_seatNumber': 0, '_action': 'fold', 'amount': -1},
-            {'_playerId': 'bot2', '_seatNumber': 0, '_action': 'raiseTo', 'amount': 25.0},
-            {'_playerId': 'bot3', '_seatNumber': 0, '_action': 'call', 'amount': 25.0},
-            ...
-            {'checkpoint': 'flop'},
-            {'_playerId': 'Nav', '_seatNumber': 0, '_action': 'check', 'amount': 0.0}
-           ],
-    'chipCounts': {
-            'bot2': 500.0,
-            ...
-            }
-    'dealerOn': <playerId>
-    'community': ['Kh', 'Ts', '9h'],
-  }
 
   What the C++ can provide:
   >>> pokerai.exports.getActionSituation({ 'id': <onDiskId>, '_instance': <instanceHandle> }, handNum)
@@ -1332,7 +1373,20 @@ void Init(v8::Handle<v8::Object> exports) {
   exports->Set(v8::String::NewSymbol("getMaxSeats"),
      v8::FunctionTemplate::New(GetMaxSeats)->GetFunction());
 
+
+/*
+  pokerai.exports.getBlindBets({ 'id': <onDiskId>, '_instance': <instanceHandle> })
+  Actual response:
+    [
+     {"username": <playerName>, "seat": <seatId>, "action": "smallBlind", "amount": amount}
+     ,
+     {"username": <playerName>, "seat": <seatId>, "action": "bigBlind", "amount": amount}
+    ]
+*/
+  exports->Set(v8::String::NewSymbol("getBlindBets"),
+     v8::FunctionTemplate::New(GetBlindBets)->GetFunction());
 }
+
 
 // Our target is named "pokerai". See binding.gyp for more
 NODE_MODULE(pokerai, Init)

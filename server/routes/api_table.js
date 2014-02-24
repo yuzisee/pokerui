@@ -1,4 +1,6 @@
 
+var STARTING_CHIPS = 3.00;
+var SMALL_BLIND = 0.01;
 /*
  * Manage tables and things
  */
@@ -53,11 +55,33 @@ exports.getTable = function(req, res){
    var tableid = req.params.tableid;
    var table = global.tables[tableid];
    
+   var result = {'id': tableid, 'players': table['players'], 'totalSeats': table['totalSeats']};
    if('instance' in table){
-      global.tables[tableid]['actionOn'] = global.pokerai.getActionOn(table['instance']);
+      result['actionOn'] = global.pokerai.getActionOn(table['instance']);
    }
 
-   res.json(table);
+   res.json(result);
+}
+
+// Get the next seat after ``seat``
+function incrseat(seat, filledSeats) {
+    var result = seat + 1;
+
+    if (result < 0) {
+       // This should never happen.
+       throw 'logic bug in usage of incrseat()';
+    }
+
+    if (result > filledSeats) {
+       // This should never happen.
+       throw 'logic bug in usage of incrseat()';
+    }
+
+    if (result == filledSeats) {
+       return 0;
+    } else {
+       return result;
+    }
 }
 
 exports.startGame = function(req, res){
@@ -102,9 +126,8 @@ exports.startGame = function(req, res){
 //   ...
 // ]
    console.log(startTablePlayers);
-   var STARTING_CHIPS = 1500;
    var pokeraiInstance = global.pokerai.startTable(tableid + '.logs', STARTING_CHIPS, startTablePlayers);
-   global.tables[tableid]['instance'] = pokeraiInstance;
+   table['instance'] = pokeraiInstance;
    // TODO(from yuzisee): You have to call pokeraiInstance.shutdownTable() at some point to save state, etc.
 
    var actionOn = global.pokerai.getActionOn(pokeraiInstance);
@@ -112,18 +135,19 @@ exports.startGame = function(req, res){
    var actionSituation = global.pokerai.getActionSituation(pokeraiInstance, actionOn['currentHand']);
 
    // Initialize action situation
-   global.tables[tableid]['hand'] = [];
-   global.tables[tableid]['actionOn'] = actionOn;
-   global.tables[tableid]['hand'][0] = 
-   {   
+   table['actionOn'] = actionOn;
+   table['hands'][0] = {   
       'bets': [],
-      'chipCount': actionSituation.chipsAtRound,
-      'chipsAtRound': actionSituation.chipsAtRound,
+      'startingChips': actionSituation.chipsAtRound,
+      'startingPot': {},
       'dealer': actionSituation.dealer,
-      'community': actionSituation.community
+      'community': []
    };
+   table['hands']['bets'].push_back({'checkpoint': 'preflop'});
+   table['hands']['bets'].push_back({'_username': });
 
-   global.tables[tableid]['state'] = "STARTED"
+   
+
    exports.getTable(req, res);
 };
 

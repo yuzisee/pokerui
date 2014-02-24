@@ -123,8 +123,40 @@ app.post('/api/table/:tableid/action', api_table.performAction); // try performi
 // Example:
 // {
 //   handNum: 5,
-//   holecards: {...},
-//   actions: {...},
+//   yourHolecards: [...],
+/*
+    'actions': [
+            {'checkpoint': 'preflop'},
+            {'_username': 'Nav', '_seatNumber': 0, '_action': 'smallBlind', 'amount': 5.0},
+            {'_username': 'Joseph', '_seatNumber': 0, '_action': 'bigBlind', 'amount': 10.0},
+            {'_username': 'bot1', '_seatNumber': 0, '_action': 'fold', 'amount': -1},
+            {'_username': 'bot2', '_seatNumber': 0, '_action': 'raiseTo', 'amount': 25.0},
+            {'_username': 'bot3', '_seatNumber': 0, '_action': 'call', 'amount': 25.0},
+            ...
+            {'checkpoint': 'flop'},
+            {'_username': 'Nav', '_seatNumber': 0, '_action': 'check', 'amount': 0.0}
+           ],
+    'startingChips': {
+            'preflop': {
+              'bot2': 500.0,
+              ...
+              }
+            ,
+            'flop': {
+              ...
+            }
+    }
+    'startingPot': {
+            'preflop': {
+            }
+            ,
+            'flop': {
+            }
+    },
+    'dealer': <username>,
+    'community': ['Kh', 'Ts', '9h'],
+*/
+//   },
 //   outcome: {...}
 // }
 app.get('/api/table/:tableid/hand/:handNum', api_table.getStatus);
