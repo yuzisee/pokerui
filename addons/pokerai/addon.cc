@@ -1232,7 +1232,7 @@ v8::Handle<v8::Value> GetBlindBets(const v8::Arguments& args) {
     smallBlind->Set(v8::String::NewSymbol("seat"), v8::Uint32::New(smallBlindBet.myPlayerIndex));
     smallBlind->Set(v8::String::NewSymbol("username"), v8::String::New(smallBlindBet.myPlayerName.c_str()));
     smallBlind->Set(v8::String::NewSymbol("amount"), v8::Number::New(smallBlindBet.bet));
-    smallBlind->Set(v8::String::NewSymbol("action"), v8::String::New("smallBlind"));
+    smallBlind->Set(v8::String::NewSymbol("_action"), v8::String::New("smallBlind"));
   } else {
     v8::ThrowException(v8::Exception::TypeError(v8::String::New("No blind bet yet this hand. Are you sure you started?")));
     return scope.Close(v8::Undefined());
@@ -1242,7 +1242,7 @@ v8::Handle<v8::Value> GetBlindBets(const v8::Arguments& args) {
     bigBlind->Set(v8::String::NewSymbol("seat"), v8::Uint32::New(bigBlindBet.myPlayerIndex));
     bigBlind->Set(v8::String::NewSymbol("username"), v8::String::New(bigBlindBet.myPlayerName.c_str()));
     bigBlind->Set(v8::String::NewSymbol("amount"), v8::Number::New(bigBlindBet.bet));
-    bigBlind->Set(v8::String::NewSymbol("action"), v8::String::New("bigBlind"));
+    bigBlind->Set(v8::String::NewSymbol("_action"), v8::String::New("bigBlind"));
   } else {
     v8::ThrowException(v8::Exception::TypeError(v8::String::New("No big blind found (but small blind was ok?) There must be a logic bug somehwere.")));
     return scope.Close(v8::Undefined());

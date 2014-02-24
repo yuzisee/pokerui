@@ -84,6 +84,15 @@ function incrseat(seat, filledSeats) {
     }
 }
 
+// Make the blind bets nicer (conform to the interface for all other bets)
+function getNiceBlindBets(pokeraiInstance) {
+   var rawBlindBets = global.pokerai.getBlindBets(pokeraiInstance);
+   for (b in rawBlindBets) {
+      rawBlindBets[b]['blind'] = true;
+   }
+   return rawBlindBets;
+}
+
 exports.startGame = function(req, res){
    var tableid = req.params.tableid;
    var table = global.tables[tableid];
@@ -136,17 +145,13 @@ exports.startGame = function(req, res){
 
    // Initialize action situation
    table['actionOn'] = actionOn;
-   table['hands'][0] = {   
-      'bets': [],
-      'startingChips': actionSituation.chipsAtRound,
+   table['state'][actionOn['currentHand']] = {   
+      'actions': [{'checkpoint': 'preflop'}].concat(getNiceBlindBets(pokeraiInstance)),
+      'startingChips': {'preflop': actionSituation.chipsAtRound},
       'startingPot': {},
       'dealer': actionSituation.dealer,
       'community': []
    };
-   table['hands']['bets'].push_back({'checkpoint': 'preflop'});
-   table['hands']['bets'].push_back({'_username': });
-
-   
 
    exports.getTable(req, res);
 };
@@ -164,31 +169,43 @@ function getOutcome(req, res) {
    res.json(global.tables[tableid]['hand'][handNum]['outcome']);
 };
 
-function getHolecards(req, res) {
-   var tableid = req.params.tableid;
-   var handNum = req.params.handNum;
-   var seatNum = req.params.seatNum;
-   var pokeraiInstance = global.tables[tableid]['instance'];
-
+function getHolecards(pokeraiInstance, handNum, seatNum) {
    var currentHandNum = global.pokerai.getActionOn(pokeraiInstance).currentHand;
    if(currentHandNum != handNum){
       throw "Handnum doesn't match";
    }
    // TODO(from yuzisee): Assert that currentHandNum === handNum and otherwise tell the user something went wrong
 
-   res.json(global.pokerai.getHoleCards(pokeraiInstance, seatNum));
+   return global.pokerai.getHoleCards(pokeraiInstance, seatNum)['holeCards'];
 };
 
 function getActionSituation(req, res){
 
-    var tableid = req.params.tableid;
-    var handNum = req.params.handNum;
+   var tableid = req.params.tableid;
+   var handNum = req.params.handNum;
 
-    res.json(global.tables[tableid]['hand'][handNum]['actionSituation'])
+   res.json(global.tables[tableid]['hand'][handNum]['actionSituation'])
+};
+
+function getSeatNum(username, tableid){
+   var activeTables = global.users[username]['activeTables'];
+   if (tableid in activeTables) {
+      return activeTables[tableid]['seat'];
+   } else {
+      throw "User requested information for a table they are not sitting at!";
+   }
 };
 
 exports.getStatus = function(req, res){
-    res.json({})
+
+   var tableid = req.params.tableid;
+   var handNum = req.params.handNum;
+   var table = global.tables[tableid];
+   var pokeraiInstance = table['instance'];
+
+   var seatNum = getSeatNum(req.session.username, tableid);
+
+   res.json({'hand': handNum, 'state': table['state'][handNum], 'yourCards': getHolecards(pokeraiInstance, handNum, seatNum)});
 }
 
 exports.performAction = function(req, res){

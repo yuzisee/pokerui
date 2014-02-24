@@ -29,7 +29,13 @@ function CreatePlayerForTestWithUsername(username) {
             expect(resp.statusCode).to.eql(200);
             callback(JSON.parse(body));
          });
-       }
+      },
+      'post': function(apiurl, callback) {
+         request.post(LOCAL_SERVER_URL + apiurl, {jar:cookieJar}, function(err,resp,body){
+            expect(resp.statusCode).to.eql(200);
+            callback(JSON.parse(body));
+         });
+      }
    };
 };
 
@@ -82,7 +88,7 @@ describe('end-to-end test of the full REST API', function(){
         expect(newTable.totalSeats > 2).to.be.ok(); // Some valid number of seats
 
         console.log("Okay, let's sit at this table");
-        player1.post('api/table' + table.id + '/join', function(responseBody){
+        player1.post('api/table/' + table.id + '/join', function(responseBody){
            expect(table.id).to.be(responseBody['id']); // We should get back the same tableId we requested
            expect(table.totalSeats).to.be(responseBody['totalSeats']); // We should get back the same totalSeats as before
            expect(responseBody).to.have.property('players'); // The table has a players list...
@@ -90,7 +96,7 @@ describe('end-to-end test of the full REST API', function(){
         
            player1.get('api/session', function(responseBody){
               lastExpectedSessionState = {'username': player1.getUsername(), 'activeTables': {}};
-              lastExpectedSessionState['activeTables'][tableId] = {'seat': 0};
+              lastExpectedSessionState['activeTables'][table.id] = {'seat': 0};
               expect(responseBody).to.eql(lastExpectedSessionState); // Even if we disconnect at this point we can find this table again (and which seat we're in)
               done();
            });
@@ -100,9 +106,10 @@ describe('end-to-end test of the full REST API', function(){
 
   var player1Again = CreatePlayerForTestWithUsername(player1.getUsername()); // Reset cookie for the next request to simulate reconnection
   it("should allow us to reconnect if we lose our cookie and get a new one", function(done){
+     expect(player1Again.getUsername()).to.eql(player1.getUsername());
      // Okay, and can we get it back in this state if we disconnect right now?
      player1Again.login(function(responseBody) {
-        expect(responseBody['username']).to.eql(TEST_USERNAME); // The server has picked up our username
+        expect(responseBody['username']).to.eql(player1.getUsername()); // The server has picked up our username
         expect(responseBody).to.eql(lastExpectedSessionState); // We disconnected, and it still got us back
         done();
      });
@@ -117,7 +124,7 @@ describe('end-to-end test of the full REST API', function(){
   });
 
   it("should allow a second player to sit at the same table", function(done){
-     player2.post('api/table/' + tableId + '/join', function(responseBody){
+     player2.post('api/table/' + table.id + '/join', function(responseBody){
         expect(table.id).to.be(responseBody['id']); // We should get back the same tableId we requested
         expect(table.totalSeats).to.be(responseBody['totalSeats']); // We should get back the same totalSeats as always
         expect(responseBody).to.have.property('players'); // The table has a players list...
@@ -133,7 +140,7 @@ describe('end-to-end test of the full REST API', function(){
 
   var handnum;
   it("should all run smoothly if player 2 starts the game", function(done){
-     player1.post('api/table/' + tableId + '/start_game'), function(responseBody){
+     player1.post('api/table/' + table.id + '/start_game', function(responseBody){
        // Verify that the game has started.
        handnum = responseBody['actionOn']['currentHand']
        expect(handnum).to.be.a('number');
@@ -142,22 +149,24 @@ describe('end-to-end test of the full REST API', function(){
      });
   });
 
-  var expectedActionSituation = {'actions': [], 'startingChips': {'preflop': {}}, 'startingPot': {}, 'dealerOn': player1.getUsername(), 'community': []};
+  var expectedActionSituation = {'actions': [], 'startingChips': {'preflop': {}}, 'startingPot': {}, 'dealer': player1.getUsername(), 'community': []};
   expectedActionSituation['actions'].push({'checkpoint': 'preflop'});
-  expectedActionSituation['actions'].push({'_playerId': player1.getUsername(), '_seatNumber': 0, 'blind': true, 'amount': 0.01});
-  expectedActionSituation['actions'].push({'_playerId': player2.getUsername(), '_seatNumber': 1, 'blind': true, 'amount': 0.02});
+  expectedActionSituation['actions'].push({'username': player1.getUsername(), 'seat': 0, 'blind': true, '_action': 'smallBlind', 'amount': 0.01});
+  expectedActionSituation['actions'].push({'username': player2.getUsername(), 'seat': 1, 'blind': true, '_action': 'bigBlind', 'amount': 0.02});
   expectedActionSituation['startingChips']['preflop'][player1.getUsername()] = 3.0;
   expectedActionSituation['startingChips']['preflop'][player2.getUsername()] = 3.0;
   
   it("should show a fresh table with the same number of chips to all players", function(done){
-     player1.get('api/table/' + tableId, function(responseBody){
+     player1.get('api/table/' + table.id, function(responseBody){
         expect(responseBody['actionOn']).to.eql({'currentHand': handnum, 'actionOn': player1.getUsername()});
 
-        player1.get('api/table/' + tableId + '/hand/' + handnum, function(responseBody){
-          
-          expect(responseBody['actions']).to.eql(expectedActionSituation)
+        player1.get('api/table/' + table.id + '/hand/' + handnum, function(responseBody){
+          console.log(responseBody);
+          expect(responseBody).to.have.property('state');
+          expect(responseBody['state']).to.eql(expectedActionSituation);
           // Verify that the game shows started for P2 as well
           done();
+        });
      });
   });
 
