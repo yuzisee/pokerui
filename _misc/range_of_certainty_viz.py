@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-# range_of_certainty_viz.py
-"""Usage: $0 tracked_apps_history_*.csv"""
+"""range_of_certainty_viz.py"""
 
 import argparse
 import collections
 import math
+
+import matplotlib.pyplot
 
 # import scipy.stats
 
@@ -111,11 +112,20 @@ class PercentageDataset(object):
     def fancy_stats(self, accuracy_decimal_points) -> StatisticallySignificant:
         return new_AgrestiCoull(accuracy_decimal_points=accuracy_decimal_points, n_s=self._n_s, n=self._n)
 
-    def print_basic_stats(self) -> None:
+    def basic_stats(self) -> str:
+        raw_stats_str = self.raw_stats()
+
         pct = self._n_s / float(self._n)
         unbiased_pct = (self._n_s + 0.5) / (self._n + 1)
-        print('Observed percentage: {:0.1f}% = {} out of {}'.format(pct*100, self._n_s, self._n))
-        print('After Laplace Smoothing w/ Jeffreys Prior: {:0.1f}%'.format(unbiased_pct * 100))
+
+        return "\r\n".join([
+            'Observed percentage: {:0.1f}% = {}'.format(pct * 100, raw_stats_str)
+            ,
+            'After Laplace Smoothing w/ Jeffreys Prior: {:0.1f}%'.format(unbiased_pct * 100)
+        ])
+
+    def raw_stats(self) -> str:
+        return '{} successes out of {} events'.format(self._n_s, self._n)
 
     # def agresti_coull(self, confidence_pct):
     #     """For a confidence interval of 90%, z = -normcdfinv(0.05) = 1.96
@@ -277,6 +287,30 @@ def new_AgrestiCoull(accuracy_decimal_points, n_s, n) -> StatisticallySignifican
         return StatisticallySignificant(conservative=conservative_pct, optimistic=optimistic_pct, nominal=(float(n_s) / float(n_s + n_f)), display_str=display_str, confidence_pct=confidence_pct, accuracy_decimal_points=accuracy_decimal_points)
 
 
+def write_viz_to_image(primary_output_imagename: str, input_basicstats: PercentageDataset, input_fancystats: StatisticallySignificant) -> None:
+    confidence_pct100 = 100.0 * input_fancystats.confidence_pct
+    observed_success_rate = input_basicstats.raw_pct()
+
+    png_dpi = 1 / matplotlib.pyplot.rcParams['figure.dpi']  # pixel in inches
+    # https://matplotlib.org/stable/gallery/subplots_axes_and_figures/figure_size_units.html#figure-size-in-pixel
+    matplotlib.pyplot.figure(figsize=(1000.0 * png_dpi, 1200.0 * png_dpi))
+    matplotlib.pyplot.clf()
+
+    # Observed is X
+    # If we choose to draw error bars at Y and Z, we can say
+    # "..."
+    # a.k.a. "80% range of certainty"
+    matplotlib.pyplot.title('{0:0.1f}% of the time, the error on our estimated success rate is more than ±{0:0.1f}% a.k.a. "{1:0.1f}% range of certainty"'.format(100.0 - confidence_pct100, confidence_pct100))
+    matplotlib.pyplot.plot([observed_success_rate, observed_success_rate], [0.0, 1.0], '-', label='Observed (hidden/inferred) success rate')
+    # matplotlib.pyplot.plot(range(N),Y,'.',label='Corrupted')
+    matplotlib.pyplot.xlabel('Possible values for the underlying (hidden) "true" success rate')
+    matplotlib.pyplot.ylabel('Likelihood of observing ' + input_basicstats.raw_stats())
+    matplotlib.pyplot.legend()
+
+    print('Writing ' + primary_output_imagename)
+    matplotlib.pyplot.savefig(primary_output_imagename)
+
+
 def read_args() -> PercentageDataset:
     parser = argparse.ArgumentParser(
                     prog="range_of_certainty_viz.py",
@@ -307,8 +341,10 @@ def read_args() -> PercentageDataset:
 
 def main() -> None:
     test_data = read_args()
-    test_data.print_basic_stats()
-    print(test_data.fancy_stats(accuracy_decimal_points=3).display_str)
+    print(test_data.basic_stats())
+    range_of_certainty_calculation = test_data.fancy_stats(accuracy_decimal_points=3)
+    print(range_of_certainty_calculation.display_str)
+    write_viz_to_image('range_of_certainty.png', test_data, range_of_certainty_calculation)
 
 
 if __name__ == '__main__':
