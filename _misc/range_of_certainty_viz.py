@@ -2,10 +2,6 @@
 # range_of_certainty_viz.py
 """Usage: $0 tracked_apps_history_*.csv"""
 
-# https://stackoverflow.com/questions/4341746/how-do-i-disable-a-pylint-warning
-#noqa: E266
-# https://stackoverflow.com/questions/18444840/how-to-disable-a-pep8-error-in-a-specific-file
-
 import argparse
 import collections
 import math
@@ -87,6 +83,7 @@ def scipy_stats_norm_cdf_mean(x):
     a2 = -0.1201676
     a3 = 0.937298
     return 1.0 - scipy_stats_norm_pdf(x) * t * (a1 + t * (a2 + t * a3))
+
 
 StatisticallySignificant = collections.namedtuple('StatisticallySignificant', ['conservative', 'optimistic', 'nominal', 'display_str', 'confidence_pct', 'accuracy_decimal_points'])
 
@@ -307,10 +304,17 @@ def read_args() -> PercentageDataset:
 
     raise NotImplementedError("This should be impossible, but if you get here... maybe someone added a new type of command line argument we weren't ready for?")
 
+
 def main() -> None:
     test_data = read_args()
     test_data.print_basic_stats()
     print(test_data.fancy_stats(accuracy_decimal_points=3).display_str)
 
+
 if __name__ == '__main__':
     main()
+
+# https://stackoverflow.com/questions/4341746/how-do-i-disable-a-pylint-warning
+# https://stackoverflow.com/questions/18444840/how-to-disable-a-pep8-error-in-a-specific-file
+# noqa: E266
+# noqa: E501
