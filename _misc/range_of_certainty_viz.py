@@ -83,7 +83,7 @@ class PercentageDataset(object):
     def raw_pct(self):
         return self._n_s / self._n
 
-    def log_prob(self, true_success_rate : float) -> float:
+    def ln_prob(self, true_success_rate : float) -> float:
         """What is the the ln(probability) of seeing the given observations, if the true "success rate" is as given?
           → the probability of seeing `count_successes` successes is x^count_successes
           → the probability of seeing `count_failures` falures is (1.0-x)^count_failures
@@ -323,13 +323,15 @@ def write_viz_to_images(primary_output_imagename: str, input_basicstats: Percent
 
     # if `x` is the "true success rate",
 
-    log_ys = [input_basicstats.log_prob(x) for x in xs]
+    ln_ys = [input_basicstats.ln_prob(x) for x in xs]
 
     # for numerical stability only
-    plot_maxlogy = max(log_ys)
+    plot_maxlny = max(ln_ys)
+    adjustment_10y = math.ceil(plot_maxlny / math.log(10.0))
+    adjustment_lny = adjustment_10y * math.log(10.0)
 
-    adjusted_ys = [math.exp(y - plot_maxlogy) for y in log_ys]
-    adjustment_y = math.exp(-plot_maxlogy)
+    adjusted_ys = [math.exp(y - adjustment_lny) for y in ln_ys]
+    plot_maxy = math.exp(plot_maxlny - adjustment_lny)
 
     # Observed is X
     # If we choose to draw error bars at Y and Z, we can say
@@ -338,14 +340,16 @@ def write_viz_to_images(primary_output_imagename: str, input_basicstats: Percent
     matplotlib.pyplot.clf()
     matplotlib.pyplot.suptitle("Probability of observating " + input_basicstats.raw_stats().replace(", ", "\n") + ', if the "true success rate" is ... (see x-axis)')
     # matplotlib.pyplot.title('{0:0.1f}% of the time, the error on our estimated success rate is more than ±{0:0.1f}% a.k.a. "{1:0.1f}% range of certainty"'.format(100.0 - confidence_pct100, confidence_pct100))
-    matplotlib.pyplot.plot([observed_success_rate, observed_success_rate], [0.0, 1.0], '--', label='"Observed" success rate, a.k.a. n_success ÷ n_total', color='blue')
+    matplotlib.pyplot.plot([observed_success_rate, observed_success_rate], [0.0, plot_maxy], '--', label='"Observed" success rate, a.k.a. n_success ÷ n_total', color='blue')
     matplotlib.pyplot.plot(xs, adjusted_ys,'-', color='green')
-    matplotlib.pyplot.xlabel('"true success rate""')
-    matplotlib.pyplot.ylabel('Probability times {}'.format(adjustment_y))
     matplotlib.pyplot.legend()
 
     ax = matplotlib.pyplot.subplot()
     ax.set_ylim(bottom=0.0)
+
+    matplotlib.pyplot.xlabel('"true success rate""')
+    matplotlib.pyplot.ylabel('Probability')
+    matplotlib.pyplot.text(0.0, ax.get_ylim()[1], '10^(−{})'.format(-adjustment_10y), verticalalignment='bottom', horizontalalignment='right')
 
     print('Writing 0001_' + primary_output_imagename)
     matplotlib.pyplot.savefig('0001_' + primary_output_imagename)
