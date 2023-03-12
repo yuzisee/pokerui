@@ -101,6 +101,10 @@ class PercentageDataset(object):
 
         return self._n_s * math.log(true_success_rate) + self._n_f * math.log1p(-true_success_rate)
 
+    def unbiased_pct(self) -> float:
+        """Bayesian estimate of true success rate, using Jeffrey's Prior"""
+        return (self._n_s + 0.5) / (self._n + 1)
+
     def fancy_stats(self, accuracy_decimal_points) -> StatisticallySignificant:
         return new_AgrestiCoull(accuracy_decimal_points=accuracy_decimal_points, n_s=self._n_s, n=self._n)
 
@@ -108,11 +112,10 @@ class PercentageDataset(object):
         raw_stats_str = self.raw_stats()
 
         pct = self._n_s / float(self._n)
-        unbiased_pct = (self._n_s + 0.5) / (self._n + 1)
 
         return "\r\n".join([
             'Observed percentage: {:0.1f}% = {}'.format(pct * 100, raw_stats_str),
-            'After Laplace Smoothing w/ Jeffreys Prior: {:0.1f}%'.format(unbiased_pct * 100)
+            'After Laplace Smoothing w/ Jeffreys Prior: {:0.1f}%'.format(self.unbiased_pct() * 100)
         ])
 
     def raw_stats(self) -> str:
@@ -316,6 +319,7 @@ def write_viz_to_images(primary_output_imagename: str, input_basicstats: Percent
     # === Viz N: Illustrate a solution ===
 
     observed_success_rate = input_basicstats.raw_pct()
+    estimated_success_rate = input_basicstats.unbiased_pct()
 
     x_resolution = math.ceil(0.5 * xpixels)
     xs = [float(x) / x_resolution for x in range(int(x_resolution+1))]
@@ -338,16 +342,18 @@ def write_viz_to_images(primary_output_imagename: str, input_basicstats: Percent
     # "..."
     # a.k.a. "80% range of certainty"
     matplotlib.pyplot.clf()
-    matplotlib.pyplot.suptitle("Probability of observating " + input_basicstats.raw_stats().replace(", ", "\n") + ', if the "true success rate" is ... (see x-axis)')
+    matplotlib.pyplot.suptitle("Probability of observating " + input_basicstats.raw_stats().replace(", ", "\n") + ', if the "true success rate" is … (see x-axis)', fontweight='bold')
+    matplotlib.pyplot.title("We'll need to choose a prior distribution of \"true success rate\" in order to perform Bayesian estimation.\n(We use Jeffrey's Prior going forward here, but any prior would be fine)\n")
     # matplotlib.pyplot.title('{0:0.1f}% of the time, the error on our estimated success rate is more than ±{0:0.1f}% a.k.a. "{1:0.1f}% range of certainty"'.format(100.0 - confidence_pct100, confidence_pct100))
-    matplotlib.pyplot.plot([observed_success_rate, observed_success_rate], [0.0, plot_maxy], '--', label='"Observed" success rate, a.k.a. n_success ÷ n_total', color='blue')
+    matplotlib.pyplot.plot([observed_success_rate, observed_success_rate], [0.0, plot_maxy], '--', label="\"Observed\" success rate:\na.k.a. n_success ÷ n_total;\nthis is also the Bayesian estimate\nof true success rate,\nif we use a /uniform/ prior.\n", color='blue')
+    matplotlib.pyplot.plot([estimated_success_rate, estimated_success_rate], [0.0, plot_maxy], '--', label="\n\"Unbiased\" success rate:\na.k.a. Bayesian estimate\nof true success rate,\nif we use an /uninformed/ prior\n(a.k.a. Jeffrey's Prior)", color='gray')
     matplotlib.pyplot.plot(xs, adjusted_ys,'-', color='green')
     matplotlib.pyplot.legend()
 
     ax = matplotlib.pyplot.subplot()
     ax.set_ylim(bottom=0.0)
 
-    matplotlib.pyplot.xlabel('"true success rate""')
+    matplotlib.pyplot.xlabel('"true success rate"')
     matplotlib.pyplot.ylabel('Probability')
     matplotlib.pyplot.text(0.0, ax.get_ylim()[1], '10^(−{})'.format(-adjustment_10y), verticalalignment='bottom', horizontalalignment='right')
 
