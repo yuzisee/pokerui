@@ -83,6 +83,24 @@ class PercentageDataset(object):
     def raw_pct(self):
         return self._n_s / self._n
 
+    def log_prob(self, true_success_rate : float) -> float:
+        """What is the the ln(probability) of seeing the given observations, if the true "success rate" is as given?
+          → the probability of seeing `count_successes` successes is x^count_successes
+          → the probability of seeing `count_failures` falures is (1.0-x)^count_failures
+
+        :param true_success_rate: value between 0.0 and 1.0
+        :return: ln(probability_of_seeing_events)
+          ln(probability_of_seeing_events) = ln(x^count_successes   *   (1.0-x)^count_failures)
+                                           = ln(x^count_successes) + ln((1.0-x)^count_failures)
+                                           = count_successes*ln(x) + count_failures*ln((1.0-x))
+        """
+        if (true_success_rate <= 0.0) and (self._n_s > 0):
+            return -math.inf
+        if (true_success_rate >= 1.0) and (self._n_f > 0):
+            return -math.inf
+
+        return self._n_s * math.log(true_success_rate) + self._n_f * math.log1p(-true_success_rate)
+
     def fancy_stats(self, accuracy_decimal_points) -> StatisticallySignificant:
         return new_AgrestiCoull(accuracy_decimal_points=accuracy_decimal_points, n_s=self._n_s, n=self._n)
 
@@ -98,7 +116,7 @@ class PercentageDataset(object):
         ])
 
     def raw_stats(self) -> str:
-        return '{} successes out of {} events'.format(self._n_s, self._n)
+        return '{:.0f} failures and {:.0f} successes, out of {} total events'.format(self._n_f, self._n_s, self._n)
 
     # def agresti_coull(self, confidence_pct):
     #     """For a confidence interval of 90%, z = -normcdfinv(0.05) = 1.96
@@ -273,12 +291,14 @@ def write_viz_to_images(primary_output_imagename: str, input_basicstats: Percent
     rect_width_radius = 1.0 / input_basicstats.n() / 2.0
 
     matplotlib.pyplot.clf()
-    matplotlib.pyplot.suptitle('We observed {:.0f} failures and {:.0f} successes out of {} total events...'.format(count_failures, count_successes, input_basicstats.n()), fontweight='bold')
-    matplotlib.pyplot.title("...but is there to express a range of certainty, without getting into\nthe complexity of confidence intervals, p-values, etc.?\n")
+    matplotlib.pyplot.suptitle('We observed a "{:.1f}% success rate"...'.format(input_basicstats.raw_pct() * 100.0), fontweight='bold')
+    matplotlib.pyplot.title("...but is there a way to express a range of certainty, without getting into\nthe complexity of confidence intervals, p-values, etc.?\n")
     if count_failures > 0:
         matplotlib.pyplot.text(rect_width_radius, count_failures, ' {:.0f} failures'.format(count_failures), verticalalignment='top')
     if count_successes > 0:
         matplotlib.pyplot.text(1.0 - rect_width_radius, count_successes, '{:.0f} successes '.format(count_successes), verticalalignment='top', horizontalalignment='right')
+    # https://math.stackexchange.com/questions/864606/difference-between-%E2%89%88-%E2%89%83-and-%E2%89%85
+    matplotlib.pyplot.text(0.5, 0.0, '\n{} ≈ "{:.1f}%" success rate'.format(input_basicstats.raw_stats(), input_basicstats.raw_pct() * 100.0), horizontalalignment='center', verticalalignment='top', fontweight='bold')
     matplotlib.pyplot.xlim(-0.5, 1.5)
     matplotlib.pyplot.ylim(0.0, max(count_failures, count_successes))
     ax = matplotlib.pyplot.subplot()
@@ -296,17 +316,32 @@ def write_viz_to_images(primary_output_imagename: str, input_basicstats: Percent
     confidence_pct100 = 100.0 * input_fancystats.confidence_pct
     observed_success_rate = input_basicstats.raw_pct()
 
+    x_resolution = math.ceil(0.5 / png_dpi)
+    xs = [float(x) / x_resolution for x in range(int(x_resolution+1))]
+    # print(repr(xs))
+
+    # if `x` is the "true success rate",
+
+    log_ys = [input_basicstats.log_prob(x) for x in xs]
+    # print(repr(log_ys))
+    ys = [math.exp(y) for y in log_ys]
+    plot_ymax = max(ys)
+
     # Observed is X
     # If we choose to draw error bars at Y and Z, we can say
     # "..."
     # a.k.a. "80% range of certainty"
     matplotlib.pyplot.clf()
-    matplotlib.pyplot.title('{0:0.1f}% of the time, the error on our estimated success rate is more than ±{0:0.1f}% a.k.a. "{1:0.1f}% range of certainty"'.format(100.0 - confidence_pct100, confidence_pct100))
-    matplotlib.pyplot.plot([observed_success_rate, observed_success_rate], [0.0, 1.0], '-', label='Observed (hidden/inferred) success rate')
-    # matplotlib.pyplot.plot(range(N),Y,'.',label='Corrupted')
-    matplotlib.pyplot.xlabel('Possible values for the underlying (hidden) "true" success rate')
-    matplotlib.pyplot.ylabel('Likelihood of observing ' + input_basicstats.raw_stats())
+    matplotlib.pyplot.suptitle("Probability of observating " + input_basicstats.raw_stats().replace(", ", "\n") + ', if the "true success rate" is ... (see x-axis)')
+    # matplotlib.pyplot.title('{0:0.1f}% of the time, the error on our estimated success rate is more than ±{0:0.1f}% a.k.a. "{1:0.1f}% range of certainty"'.format(100.0 - confidence_pct100, confidence_pct100))
+    matplotlib.pyplot.plot([observed_success_rate, observed_success_rate], [0.0, plot_ymax], '--', label='"Observed" success rate, a.k.a. n_success ÷ n_total', color='blue')
+    matplotlib.pyplot.plot(xs, ys,'-', color='green')
+    matplotlib.pyplot.xlabel('"true success rate""')
+    matplotlib.pyplot.ylabel('Probability')
     matplotlib.pyplot.legend()
+
+    ax = matplotlib.pyplot.subplot()
+    ax.set_ylim(bottom=0.0)
 
     print('Writing 0001_' + primary_output_imagename)
     matplotlib.pyplot.savefig('0001_' + primary_output_imagename)
