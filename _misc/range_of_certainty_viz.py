@@ -1,23 +1,17 @@
 #!/usr/bin/env python3
-"""range_of_certainty_viz.py"""
+"""range_of_certainty_viz.py
+
+Scroll down to `def read_args():` to see usage instructions
+"""
 
 import argparse
 import collections
 import math
 
 import matplotlib.pyplot
+import matplotlib.patches
 
 # import scipy.stats
-
-# https://github.com/python-mode/python-mode/issues/699#issuecomment-286598349
-# pylama:ignore=E201,E202
-
-
-def scipy_stats_poisson_midpoint(n):
-    """approx scipy.stats.poisson(n).median()"""
-    # return scipy.stats.poisson(n).median()
-    return (n + 1.0/3.0 - 0.02/n)
-    # return n
 
 
 def scipy_stats_norm_cdf(x):
@@ -30,26 +24,6 @@ def scipy_stats_norm_cdf(x):
         return 1.0 - (scipy_stats_norm_cdf(-x))
     else:
         return 1.0 - (scipy_stats_norm_pdf(x)) * t * (a1 + t * (a2 + t * a3))
-
-
-def scipy_stats_vstpoisson_cdf(n, x):
-    """approx scipy.stats.poisson(n).cdf(x)"""
-    # return scipy.stats.poisson(n).cdf(x)
-
-    # The variance stabilizing transformation is biased in a way that
-    # encourages convergence at the tails (the derivative is never _flat_)
-    mu = math.sqrt(n)
-    std = 0.5
-    # return scipy.stats.norm(0.0, 1.0).cdf((math.sqrt(max(x, 0.0)) - mu) / std)
-    return scipy_stats_norm_cdf(((math.sqrt(max(x, 0.0))) - mu) / std)
-
-
-def scipy_stats_vstpoisson_pmf(n, x):
-    """approx scipy.stats.poisson(n).pmf(x)"""
-    # print('{} {} = {} v {}'.format(n, x, scipy.stats.poisson(n).pmf(x), scipy_stats_poisson_cdf(n, x+0.5) - scipy_stats_poisson_cdf(n, x-0.5)))
-    # return scipy.stats.poisson(n).pmf(round(x))
-
-    return scipy_stats_vstpoisson_cdf(n, x+0.5) - scipy_stats_vstpoisson_cdf(n, x-0.5)
 
 
 def scipy_stats_norm_pdf(x):
@@ -119,8 +93,7 @@ class PercentageDataset(object):
         unbiased_pct = (self._n_s + 0.5) / (self._n + 1)
 
         return "\r\n".join([
-            'Observed percentage: {:0.1f}% = {}'.format(pct * 100, raw_stats_str)
-            ,
+            'Observed percentage: {:0.1f}% = {}'.format(pct * 100, raw_stats_str),
             'After Laplace Smoothing w/ Jeffreys Prior: {:0.1f}%'.format(unbiased_pct * 100)
         ])
 
@@ -287,19 +260,47 @@ def new_AgrestiCoull(accuracy_decimal_points, n_s, n) -> StatisticallySignifican
         return StatisticallySignificant(conservative=conservative_pct, optimistic=optimistic_pct, nominal=(float(n_s) / float(n_s + n_f)), display_str=display_str, confidence_pct=confidence_pct, accuracy_decimal_points=accuracy_decimal_points)
 
 
-def write_viz_to_image(primary_output_imagename: str, input_basicstats: PercentageDataset, input_fancystats: StatisticallySignificant) -> None:
-    confidence_pct100 = 100.0 * input_fancystats.confidence_pct
-    observed_success_rate = input_basicstats.raw_pct()
+def write_viz_to_images(primary_output_imagename: str, input_basicstats: PercentageDataset, input_fancystats: StatisticallySignificant) -> None:
 
     png_dpi = 1 / matplotlib.pyplot.rcParams['figure.dpi']  # pixel in inches
     # https://matplotlib.org/stable/gallery/subplots_axes_and_figures/figure_size_units.html#figure-size-in-pixel
-    matplotlib.pyplot.figure(figsize=(1000.0 * png_dpi, 1200.0 * png_dpi))
+    matplotlib.pyplot.figure(figsize=(1000.0 * png_dpi, 1100.0 * png_dpi))
+
+    # === Viz 1: Describe the problem ===
+    count_failures = input_basicstats.n() * (1.0 - input_basicstats.raw_pct())
+    count_successes = input_basicstats.n() * input_basicstats.raw_pct()
+
+    rect_width_radius = 1.0 / input_basicstats.n() / 2.0
+
     matplotlib.pyplot.clf()
+    matplotlib.pyplot.suptitle('We observed {:.0f} failures and {:.0f} successes out of {} total events...'.format(count_failures, count_successes, input_basicstats.n()), fontweight='bold')
+    matplotlib.pyplot.title("...but is there to express a range of certainty, without getting into\nthe complexity of confidence intervals, p-values, etc.?\n")
+    if count_failures > 0:
+        matplotlib.pyplot.text(rect_width_radius, count_failures, ' {:.0f} failures'.format(count_failures), verticalalignment='top')
+    if count_successes > 0:
+        matplotlib.pyplot.text(1.0 - rect_width_radius, count_successes, '{:.0f} successes '.format(count_successes), verticalalignment='top', horizontalalignment='right')
+    matplotlib.pyplot.xlim(-0.5, 1.5)
+    matplotlib.pyplot.ylim(0.0, max(count_failures, count_successes))
+    ax = matplotlib.pyplot.subplot()
+    ax.add_patch(matplotlib.patches.Rectangle((-rect_width_radius, 0.0), height=count_failures, width=rect_width_radius * 2.0, color='orange'))
+    ax.add_patch(matplotlib.patches.Rectangle((1.0 - rect_width_radius, 0.0), height=count_successes, width=rect_width_radius * 2.0, color='orange'))
+    ax.xaxis.set_visible(False)
+    ax.yaxis.set_tick_params(labelright=True)
+    ax.spines['top'].set_visible(False)
+
+    print('Writing 0000_' + primary_output_imagename)
+    matplotlib.pyplot.savefig('0000_' + primary_output_imagename)
+
+    # === Viz N: Illustrate a solution ===
+
+    confidence_pct100 = 100.0 * input_fancystats.confidence_pct
+    observed_success_rate = input_basicstats.raw_pct()
 
     # Observed is X
     # If we choose to draw error bars at Y and Z, we can say
     # "..."
     # a.k.a. "80% range of certainty"
+    matplotlib.pyplot.clf()
     matplotlib.pyplot.title('{0:0.1f}% of the time, the error on our estimated success rate is more than ±{0:0.1f}% a.k.a. "{1:0.1f}% range of certainty"'.format(100.0 - confidence_pct100, confidence_pct100))
     matplotlib.pyplot.plot([observed_success_rate, observed_success_rate], [0.0, 1.0], '-', label='Observed (hidden/inferred) success rate')
     # matplotlib.pyplot.plot(range(N),Y,'.',label='Corrupted')
@@ -307,8 +308,8 @@ def write_viz_to_image(primary_output_imagename: str, input_basicstats: Percenta
     matplotlib.pyplot.ylabel('Likelihood of observing ' + input_basicstats.raw_stats())
     matplotlib.pyplot.legend()
 
-    print('Writing ' + primary_output_imagename)
-    matplotlib.pyplot.savefig(primary_output_imagename)
+    print('Writing 0001_' + primary_output_imagename)
+    matplotlib.pyplot.savefig('0001_' + primary_output_imagename)
 
 
 def read_args() -> PercentageDataset:
@@ -325,7 +326,12 @@ def read_args() -> PercentageDataset:
 
     if sum(x is None for x in [args.count_total, args.count_successes, args.count_failures]) != 1:
         # NOTE: Early return (panic)
-        parser.error("Exactly two of (--count-total, --count-successes, --count-failures) must be provided. Please try again!")
+        parser.error("""
+***ERROR***
+  Exactly two of
+    (--count-total, --count-successes, --count-failures)
+  must be provided.
+Please try again!""")
 
     # INVARIANT: If we get this far, the correct command line arguments were provided.
 
@@ -344,11 +350,15 @@ def main() -> None:
     print(test_data.basic_stats())
     range_of_certainty_calculation = test_data.fancy_stats(accuracy_decimal_points=3)
     print(range_of_certainty_calculation.display_str)
-    write_viz_to_image('range_of_certainty.png', test_data, range_of_certainty_calculation)
+    write_viz_to_images('range_of_certainty.png', test_data, range_of_certainty_calculation)
 
 
 if __name__ == '__main__':
     main()
+
+
+# https://github.com/python-mode/python-mode/issues/699#issuecomment-286598349
+# pylama:ignore=E201,E202
 
 # https://stackoverflow.com/questions/4341746/how-do-i-disable-a-pylint-warning
 # https://stackoverflow.com/questions/18444840/how-to-disable-a-pep8-error-in-a-specific-file
