@@ -13,6 +13,8 @@ import matplotlib.patches
 
 # import scipy.stats
 
+CONFIG_ACCURACY_DECIMAL_POINTS = 3
+
 
 def scipy_stats_norm_cdf(x):
     t = 1.0 / (1.0 + 0.33267 * x)
@@ -83,7 +85,7 @@ class PercentageDataset(object):
     def raw_pct(self):
         return self._n_s / self._n
 
-    def ln_prob(self, true_success_rate : float) -> float:
+    def ln_prob(self, true_success_rate: float) -> float:
         """What is the the ln(probability) of seeing the given observations, if the true "success rate" is as given?
           → the probability of seeing `count_successes` successes is x^count_successes
           → the probability of seeing `count_failures` falures is (1.0-x)^count_failures
@@ -94,10 +96,18 @@ class PercentageDataset(object):
                                            = ln(x^count_successes) + ln((1.0-x)^count_failures)
                                            = count_successes*ln(x) + count_failures*ln((1.0-x))
         """
-        if (true_success_rate <= 0.0) and (self._n_s > 0):
-            return -math.inf
-        if (true_success_rate >= 1.0) and (self._n_f > 0):
-            return -math.inf
+        if true_success_rate <= 0.0:
+            if self._n_s > 0:
+                return -math.inf
+            elif self._n_f > 0:
+                # ln(1.0) ≅ 0
+                return 0.0
+        if true_success_rate >= 1.0:
+            if self._n_f > 0:
+                return -math.inf
+            elif self._n_s > 0:
+                # ln(1.0) ≅ 0
+                return 0.0
 
         return self._n_s * math.log(true_success_rate) + self._n_f * math.log1p(-true_success_rate)
 
@@ -119,7 +129,22 @@ class PercentageDataset(object):
         ])
 
     def raw_stats(self) -> str:
-        return '{:.0f} failures and {:.0f} successes, out of {} total events'.format(self._n_f, self._n_s, self._n)
+        if int(self._n_f) == self._n_f:
+            short_print_n_f = int(self._n_f)
+        else:
+            short_print_n_f = self._n_f
+
+        if int(self._n_s) == self._n_s:
+            short_print_n_s = int(self._n_s)
+        else:
+            short_print_n_s = self._n_s
+
+        if int(self._n) == self._n:
+            short_print_n = int(self._n)
+        else:
+            short_print_n = self._n
+
+        return '{} failures and {} successes, out of {} total events'.format(short_print_n_f, short_print_n_s, short_print_n)
 
     # def agresti_coull(self, confidence_pct):
     #     """For a confidence interval of 90%, z = -normcdfinv(0.05) = 1.96
@@ -267,16 +292,46 @@ def do_all_steps_agresti_coull(a_impl, accuracy_decimal_points):
 
 
 def new_AgrestiCoull(accuracy_decimal_points, n_s, n) -> StatisticallySignificant:
-    """Computed bounds & results"""
+    """Computed bounds & results
+
+    NOTE: Closed form solution for N=1
+
+    e.g. n_s := 1, n_f := 0
+
+    Let error bars go from x to 1.0
+      area_outside_confidence_interval = 0.5 * 2.0 * x^2 = x^2
+      area_inside_confidence_interval = 1.0 - x^2
+
+      plus_minus = (1.0 - x) / 2
+      confidence_pct = 1.0 - plus_minus = 1.0 - (1.0 - x) / 2 = (2.0 - 1.0 + x) / 2 = (1.0 + x) / 2
+
+    Unique point is reached when plus_minus ≃ area_outside_confidence_interval
+    (1.0 - x) / 2  ≃  x^2
+     0.5 - 0.5 x   ≃  x^2
+     0.0  ≃  x^2 + 0.5x - 0.5  =  (x + 0.25)^2 - 0.0625 - 0.5
+     positive x = -0.25 + sqrt(0.5625) = 0.5
+    """
     if n == 0:
         return StatisticallySignificant(conservative=0.0, optimistic=1.0, nominal=0.5, display_str='n/a', confidence_pct=0, accuracy_decimal_points=0)
     else:
         n_f = n - n_s
-        confidence_pct, center_pct = do_all_steps_agresti_coull(PercentageDataset(n_s=n_s, n_f=n_f), accuracy_decimal_points)
-        plus_minus = 1.0 - confidence_pct
-        # print('>>> new_AgrestiCoull  {} {} --> {} +/- {}'.format(n_s, n_f, center_pct, plus_minus))
-        conservative_pct = max(center_pct - plus_minus, 0.0)
-        optimistic_pct = min(center_pct + plus_minus, 1.0)
+        if (n_s == 1) and (n_f == 0):
+            # Closed form solution
+            conservative_pct = 0.5
+            optimistic_pct = 1.0
+            confidence_pct = 0.75
+        elif (n_s == 0) and (n_f == 1):
+            # Closed form solution (symmetric to above)
+            conservative_pct = 0.0
+            optimistic_pct = 0.5
+            confidence_pct = 0.75
+        else:
+            confidence_pct, center_pct = do_all_steps_agresti_coull(PercentageDataset(n_s=n_s, n_f=n_f), accuracy_decimal_points)
+            plus_minus = 1.0 - confidence_pct
+            # print('>>> new_AgrestiCoull  {} {} --> {} +/- {}'.format(n_s, n_f, center_pct, plus_minus))
+            conservative_pct = max(center_pct - plus_minus, 0.0)
+            optimistic_pct = min(center_pct + plus_minus, 1.0)
+
         display_str = '{:0.2f}..{:0.2f} ({} out of {})'.format(conservative_pct, optimistic_pct, n_s, n)
         return StatisticallySignificant(conservative=conservative_pct, optimistic=optimistic_pct, nominal=(float(n_s) / float(n_s + n_f)), display_str=display_str, confidence_pct=confidence_pct, accuracy_decimal_points=accuracy_decimal_points)
 
@@ -289,7 +344,8 @@ def write_viz_to_images(primary_output_imagename: str, input_basicstats: Percent
     ypixels = 1100.0
     matplotlib.pyplot.figure(figsize=(xpixels * png_dpi, ypixels * png_dpi))
 
-    # === Viz 1: Describe the problem ===
+    # === Viz 1: Set up the situation ===
+
     count_failures = input_basicstats.n() * (1.0 - input_basicstats.raw_pct())
     count_successes = input_basicstats.n() * input_basicstats.raw_pct()
 
@@ -299,9 +355,9 @@ def write_viz_to_images(primary_output_imagename: str, input_basicstats: Percent
     matplotlib.pyplot.suptitle('We observed a "{:.1f}% success rate"...'.format(input_basicstats.raw_pct() * 100.0), fontweight='bold')
     matplotlib.pyplot.title("...but is there a way to express a range of certainty, without getting into\nthe complexity of confidence intervals, p-values, etc.?\n")
     if count_failures > 0:
-        matplotlib.pyplot.text(rect_width_radius, count_failures, ' {:.0f} failures'.format(count_failures), verticalalignment='top')
+        matplotlib.pyplot.text(rect_width_radius, count_failures, ' {:.1f} failures'.format(count_failures), verticalalignment='top')
     if count_successes > 0:
-        matplotlib.pyplot.text(1.0 - rect_width_radius, count_successes, '{:.0f} successes '.format(count_successes), verticalalignment='top', horizontalalignment='right')
+        matplotlib.pyplot.text(1.0 - rect_width_radius, count_successes, '{:.1f} successes '.format(count_successes), verticalalignment='top', horizontalalignment='right')
     # https://math.stackexchange.com/questions/864606/difference-between-%E2%89%88-%E2%89%83-and-%E2%89%85
     matplotlib.pyplot.text(0.5, 0.0, '\n{} ≈ "{:.1f}%" success rate'.format(input_basicstats.raw_stats(), input_basicstats.raw_pct() * 100.0), horizontalalignment='center', verticalalignment='top', fontweight='bold')
     matplotlib.pyplot.xlim(-0.5, 1.5)
@@ -316,7 +372,7 @@ def write_viz_to_images(primary_output_imagename: str, input_basicstats: Percent
     print('Writing 0000_' + primary_output_imagename)
     matplotlib.pyplot.savefig('0000_' + primary_output_imagename)
 
-    # === Viz N: Illustrate a solution ===
+    # === Viz 2: Explore the data ===
 
     observed_success_rate = input_basicstats.raw_pct()
     estimated_success_rate = input_basicstats.unbiased_pct()
@@ -347,7 +403,7 @@ def write_viz_to_images(primary_output_imagename: str, input_basicstats: Percent
     # matplotlib.pyplot.title('{0:0.1f}% of the time, the error on our estimated success rate is more than ±{0:0.1f}% a.k.a. "{1:0.1f}% range of certainty"'.format(100.0 - confidence_pct100, confidence_pct100))
     matplotlib.pyplot.plot([observed_success_rate, observed_success_rate], [0.0, plot_maxy], '--', label="\"Observed\" success rate:\na.k.a. n_success ÷ n_total;\nthis is also the Bayesian estimate\nof true success rate,\nif we use a /uniform/ prior.\n", color='blue')
     matplotlib.pyplot.plot([estimated_success_rate, estimated_success_rate], [0.0, plot_maxy], '--', label="\n\"Unbiased\" success rate:\na.k.a. Bayesian estimate\nof true success rate,\nif we use an /uninformed/ prior\n(a.k.a. Jeffrey's Prior)", color='gray')
-    matplotlib.pyplot.plot(xs, adjusted_ys,'-', color='green')
+    matplotlib.pyplot.plot(xs, adjusted_ys, '-', color='green')
     matplotlib.pyplot.legend()
 
     ax = matplotlib.pyplot.subplot()
@@ -355,10 +411,61 @@ def write_viz_to_images(primary_output_imagename: str, input_basicstats: Percent
 
     matplotlib.pyplot.xlabel('"true success rate"')
     matplotlib.pyplot.ylabel('Probability')
-    matplotlib.pyplot.text(0.0, ax.get_ylim()[1], '10^(−{})'.format(-adjustment_10y), verticalalignment='bottom', horizontalalignment='right')
+    if adjustment_10y < 0:
+        matplotlib.pyplot.text(0.0, ax.get_ylim()[1], '10^(−{})'.format(-adjustment_10y), verticalalignment='bottom', horizontalalignment='right')
 
     print('Writing 0001_' + primary_output_imagename)
     matplotlib.pyplot.savefig('0001_' + primary_output_imagename)
+
+    # === Viz 3: Describe the problem ===
+
+    confidence_pct_str = '{:.1f}'.format(input_fancystats.confidence_pct * 100)
+    err_pct_str = '{:.1f}'.format(100 - input_fancystats.confidence_pct * 100)
+
+    matplotlib.pyplot.clf()
+    matplotlib.pyplot.suptitle("Error bars express the fact that \"a% of the time, the error on our result is more than ±b%\"\n\nThere are many confidence intervals we could choose from, for drawing \"error bars\": 99%-ile, 95%-ile, 90%-ile, etc.\n", color='red')
+    matplotlib.pyplot.title("But all of them would require us to present _two_ numbers to the reader (both a% AND b%),\nexcept… (see next image)", fontweight='bold')
+    matplotlib.pyplot.plot(xs, adjusted_ys, '-', color='green')
+    matplotlib.pyplot.text(0.5, plot_maxy, 'Any error bars we attempt to draw would face the so-called "a% b%" problem, except… (see next image)\n', horizontalalignment='center', verticalalignment='bottom')
+
+    ax = matplotlib.pyplot.subplot()
+    ax.set_ylim(bottom=0.0)
+
+    matplotlib.pyplot.xlabel('"true success rate"')
+    matplotlib.pyplot.ylabel('Probability')
+    if adjustment_10y < 0:
+        matplotlib.pyplot.text(0.0, ax.get_ylim()[1], '10^(−{})'.format(-adjustment_10y), verticalalignment='bottom', horizontalalignment='right')
+
+    print('Writing 0002_' + primary_output_imagename)
+    matplotlib.pyplot.savefig('0002_' + primary_output_imagename)
+
+    # === Viz 4: Draw a solution ===
+
+    shaded_area_xs = [(1.0 - x) * input_fancystats.conservative + x * (input_fancystats.optimistic) for x in xs]
+    shaded_area_ln_ys = [input_basicstats.ln_prob(x) for x in shaded_area_xs]
+    shaded_area_adjusted_ys = [math.exp(y - adjustment_lny) for y in shaded_area_ln_ys]
+
+    matplotlib.pyplot.clf()
+    matplotlib.pyplot.suptitle("Each binomial dataset has exactly one unique point where a% ≃ b%.\nFor this dataset, that value is a% ≃ b% ≃ {}% a.k.a. \"the {}% range of certainty\"\n".format(err_pct_str, confidence_pct_str), color='purple')
+    matplotlib.pyplot.title("This {0}%-ile (≅ 100% − {1}%) \"error bar\" states that\n\"{1}% of the time, the error on our result is more than ±{1}% true success rate\"\n".format(confidence_pct_str, err_pct_str), fontweight='bold')
+    matplotlib.pyplot.plot(xs, adjusted_ys, '-', color='green')
+    matplotlib.pyplot.plot([input_fancystats.conservative, input_fancystats.optimistic], [0.0, 0.0], '--', color='grey', label="This \"{0}%-ile error bar\" is correct {0}% of the time,\nand is also the {0}% confidence interval.".format(confidence_pct_str))
+    matplotlib.pyplot.text(estimated_success_rate, 0.0, "⇤ ±{}% ⇥\n".format(err_pct_str), horizontalalignment='center', verticalalignment='bottom', fontsize='x-large')
+    matplotlib.pyplot.legend(loc='upper center')
+
+    ax = matplotlib.pyplot.subplot()
+    ax.fill_between(shaded_area_xs, shaded_area_adjusted_ys, 0, color='grey', alpha=.382)
+    ax.set_ylim(bottom=0.0)
+
+    matplotlib.pyplot.xlabel('"true success rate"')
+    matplotlib.pyplot.ylabel('Probability')
+    matplotlib.pyplot.axvline(x=input_fancystats.conservative, ymin=0, ymax=plot_maxy / ax.get_ylim()[1], color='grey', linestyle='--')
+    matplotlib.pyplot.axvline(x=input_fancystats.optimistic, ymin=0, ymax=plot_maxy / ax.get_ylim()[1], color='grey', linestyle='--')
+    if adjustment_10y < 0:
+        matplotlib.pyplot.text(0.0, ax.get_ylim()[1], '10^(−{})'.format(-adjustment_10y), verticalalignment='bottom', horizontalalignment='right')
+
+    print('Writing 0003_' + primary_output_imagename)
+    matplotlib.pyplot.savefig('0003_' + primary_output_imagename)
 
 
 def read_args() -> PercentageDataset:
@@ -368,8 +475,8 @@ def read_args() -> PercentageDataset:
                     epilog='Basic Usage: python3 ./range_of_certainty_viz.py --count-successes=5 --count-total=7')
 
     parser.add_argument('-t', '--count-total', type=int)
-    parser.add_argument('-s', '--count-successes', type=int)
-    parser.add_argument('-f', '--count-failures', type=int)
+    parser.add_argument('-s', '--count-successes', type=float)
+    parser.add_argument('-f', '--count-failures', type=float)
 
     args = parser.parse_args()
 
@@ -397,7 +504,7 @@ Please try again!""")
 def main() -> None:
     test_data = read_args()
     print(test_data.basic_stats())
-    range_of_certainty_calculation = test_data.fancy_stats(accuracy_decimal_points=3)
+    range_of_certainty_calculation = test_data.fancy_stats(accuracy_decimal_points=CONFIG_ACCURACY_DECIMAL_POINTS)
     print(range_of_certainty_calculation.display_str)
     write_viz_to_images('range_of_certainty.png', test_data, range_of_certainty_calculation)
 
