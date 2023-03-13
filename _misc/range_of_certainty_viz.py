@@ -62,7 +62,7 @@ def scipy_stats_norm_cdf_mean(x):
     return 1.0 - scipy_stats_norm_pdf(x) * t * (a1 + t * (a2 + t * a3))
 
 
-StatisticallySignificant = collections.namedtuple('StatisticallySignificant', ['conservative', 'optimistic', 'nominal', 'display_str', 'confidence_pct', 'accuracy_decimal_points'])
+StatisticallySignificant = collections.namedtuple('StatisticallySignificant', ['conservative', 'optimistic', 'nominal', 'display_str', 'confidence_pct', 'confidence_decimal_places', 'accuracy_decimal_points'])
 
 
 class PercentageDataset(object):
@@ -158,6 +158,30 @@ class PercentageDataset(object):
             short_print_n_s = self._n_s
 
         return '{} success + {} failures'.format(short_print_n_f, short_print_n_s)
+
+    def raw_pct_desc(self, accuracy_decimal_places) -> str:
+        if self._n_s == self._n:
+            return '100%'
+        if self._n_s == 0:
+            return '0%'
+
+        basic_desc = '{}%'.format(round(self._n_s / self._n * math.pow(10.0, accuracy_decimal_places)) / math.pow(10.0, accuracy_decimal_places) * 100.0)
+
+        if self._n_s < self._n * 0.5:
+            extreme_decimal_places = math.log(self._n_s / self._n) / math.log(10)
+            if extreme_decimal_places <= -accuracy_decimal_places:
+                return '~0%'
+            else:
+                return basic_desc
+
+        if self._n_s > self._n * 0.5:
+            extreme_decimal_places = math.log1p(-self._n_s / self._n) / math.log(10)
+            if extreme_decimal_places <= -accuracy_decimal_places:
+                return '~100%'
+            else:
+                return basic_desc
+
+        return basic_desc
 
     # def agresti_coull(self, confidence_pct):
     #     """For a confidence interval of 90%, z = -normcdfinv(0.05) = 1.96
@@ -307,7 +331,7 @@ def do_all_steps_agresti_coull(a_impl, accuracy_decimal_points):
 def new_AgrestiCoull(accuracy_decimal_points, n_s, n) -> StatisticallySignificant:
     """Computed bounds & results"""
     if n == 0:
-        return StatisticallySignificant(conservative=0.0, optimistic=1.0, nominal=0.5, display_str='n/a', confidence_pct=0, accuracy_decimal_points=0)
+        return StatisticallySignificant(conservative=0.0, optimistic=1.0, nominal=0.5, display_str='n/a', confidence_pct=0, confidence_decimal_places=accuracy_decimal_points, accuracy_decimal_points=0)
     else:
         n_f = n - n_s
 
@@ -318,7 +342,8 @@ def new_AgrestiCoull(accuracy_decimal_points, n_s, n) -> StatisticallySignifican
         optimistic_pct = min(center_pct + plus_minus, 1.0)
 
         display_str = '{:0.2f}..{:0.2f} ({} out of {})'.format(conservative_pct, optimistic_pct, n_s, n)
-        return StatisticallySignificant(conservative=conservative_pct, optimistic=optimistic_pct, nominal=(float(n_s) / float(n_s + n_f)), display_str=display_str, confidence_pct=confidence_pct, accuracy_decimal_points=accuracy_decimal_points)
+        confidence_decimal_places = -math.log1p(-confidence_pct) / math.log(10)
+        return StatisticallySignificant(conservative=conservative_pct, optimistic=optimistic_pct, nominal=(float(n_s) / float(n_s + n_f)), display_str=display_str, confidence_pct=confidence_pct, confidence_decimal_places=confidence_decimal_places, accuracy_decimal_points=accuracy_decimal_points)
 
 
 def write_viz_to_images(primary_output_imagename: str, input_basicstats: PercentageDataset, input_fancystats: StatisticallySignificant) -> None:
@@ -439,8 +464,7 @@ def write_viz_to_images(primary_output_imagename: str, input_basicstats: Percent
 
     ax = matplotlib.pyplot.subplot()
 
-    confidence_decimal_places = math.log1p(-input_fancystats.confidence_pct) / math.log(10)
-    if confidence_decimal_places <= -CONFIG_ACCURACY_DECIMAL_POINTS:
+    if input_fancystats.confidence_decimal_places >= CONFIG_ACCURACY_DECIMAL_POINTS:
         matplotlib.pyplot.title("Hooray! No need for error bars.\nYour have more than enough datapoints to reach a nearly-exact estimate of true success rate.\n\n")
         matplotlib.pyplot.text(0.5, 0.5 * plot_maxy, 'The estimated "true success rate" would be already exact (to at least {} decimal places)'.format(CONFIG_ACCURACY_DECIMAL_POINTS), horizontalalignment='center')
     else:
@@ -493,16 +517,22 @@ def write_viz_to_images(primary_output_imagename: str, input_basicstats: Percent
     ax.yaxis.set_tick_params(labelright=True)
     ax.spines['top'].set_visible(False)
 
-    ax.text(observed_success_rate, conclusion_y, "\npredicted rate of success", color='black', horizontalalignment='center', verticalalignment='top', fontsize='small', fontstyle='italic')
-    ax.text(observed_success_rate, conclusion_y, '{:.0f}%'.format(100.0 * observed_success_rate), color='black', horizontalalignment='center', verticalalignment='center', bbox=dict(facecolor='white', edgecolor='black'))
-    ax.text(input_fancystats.conservative, conclusion_y, '{:.0f}% '.format(100.0 * input_fancystats.conservative), color='black', fontsize='small', horizontalalignment='right', verticalalignment='center')
-    ax.text(input_fancystats.optimistic, conclusion_y, ' {:.0f}%'.format(100.0 * input_fancystats.optimistic), color='black', fontsize='small', horizontalalignment='left', verticalalignment='center')
-
     matplotlib.pyplot.suptitle('Conclusion:', fontweight='bold')
-    matplotlib.pyplot.title("For a dataset of {}, we could choose to draw error bars\nfrom {:.1f}% to {:.1f}% to create a simplified visual sense of \"certainty\" that\nis approachable for readers who don't have a formal statistics background\n".format(input_basicstats.raw_counts_desc(), 100.0 * input_fancystats.conservative, 100.0 * input_fancystats.optimistic))
+    ax.text(observed_success_rate, conclusion_y, "\npredicted rate of success", color='black', horizontalalignment='center', verticalalignment='top', fontsize='small', fontstyle='italic')
+
+    if input_fancystats.confidence_decimal_places >= CONFIG_ACCURACY_DECIMAL_POINTS:
+        matplotlib.pyplot.title("For a dataset of {}, there is no need to draw error bars\nbeyond an accuracy of {}+ decimal places\n".format(input_basicstats.raw_counts_desc(), CONFIG_ACCURACY_DECIMAL_POINTS))
+    else:
+        ax.text(input_fancystats.conservative, conclusion_y, '{:.0f}% '.format(100.0 * input_fancystats.conservative), color='black', fontsize='small', horizontalalignment='right', verticalalignment='center')
+        ax.text(input_fancystats.optimistic, conclusion_y, ' {:.0f}%'.format(100.0 * input_fancystats.optimistic), color='black', fontsize='small', horizontalalignment='left', verticalalignment='center')
+
+        matplotlib.pyplot.title("For a dataset of {}, we could choose to draw error bars\nfrom {:.1f}% to {:.1f}% to create a simplified visual sense of \"certainty\" that\nis approachable for readers who don't have a formal statistics background\n".format(input_basicstats.raw_counts_desc(), 100.0 * input_fancystats.conservative, 100.0 * input_fancystats.optimistic))
+
+    ax.text(observed_success_rate, conclusion_y, input_basicstats.raw_pct_desc(CONFIG_ACCURACY_DECIMAL_POINTS), color='black', horizontalalignment='center', verticalalignment='center', bbox=dict(facecolor='white', edgecolor='black'))
 
     print('Writing 0004_' + primary_output_imagename)
     matplotlib.pyplot.savefig('0004_' + primary_output_imagename)
+
 
 def read_args() -> PercentageDataset:
     parser = argparse.ArgumentParser(
@@ -530,8 +560,18 @@ Please try again!""")
     if args.count_total is None:
         return PercentageDataset(args.count_successes, args.count_failures)
     elif args.count_failures is None:
+        if args.count_total < args.count_successes:
+            parser.error("""
+***ERROR***
+  --count-successes must be less than or equal to --count-total""")
+
         return PercentageDataset(args.count_successes, args.count_total - args.count_successes)
     elif args.count_successes is None:
+        if args.count_total < args.count_failures:
+            parser.error("""
+***ERROR***
+  --count-successes must be less than or equal to --count-total""")
+
         return PercentageDataset(args.count_total - args.count_failures, args.count_failures)
 
     raise NotImplementedError("This should be impossible, but if you get here... maybe someone added a new type of command line argument we weren't ready for?")
@@ -544,8 +584,10 @@ def main() -> None:
     print(range_of_certainty_calculation.display_str)
     write_viz_to_images('range_of_certainty.png', test_data, range_of_certainty_calculation)
 
-    print('Dataset: ' + test_data.raw_stats())
-    print('Predicted "success rate" w/ error bars: {:.0f}% ↔ [{:.0f}%] ↔ {:.0f}%'.format(range_of_certainty_calculation.conservative * 100.0, test_data.raw_pct() * 100.0, range_of_certainty_calculation.optimistic * 100.0))
+    if range_of_certainty_calculation.confidence_decimal_places < CONFIG_ACCURACY_DECIMAL_POINTS:
+        print('Dataset: ' + test_data.raw_stats())
+        print('Predicted "success rate" w/ error bars: {:.0f}% ↔ [{}] ↔ {:.0f}%'.format(range_of_certainty_calculation.conservative * 100.0, test_data.raw_pct_desc(CONFIG_ACCURACY_DECIMAL_POINTS), range_of_certainty_calculation.optimistic * 100.0))
+
 
 if __name__ == '__main__':
     main()
