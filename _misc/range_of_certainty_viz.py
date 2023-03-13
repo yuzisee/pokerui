@@ -165,7 +165,11 @@ class PercentageDataset(object):
         if self._n_s == 0:
             return '0%'
 
-        basic_desc = '{}%'.format(round(self._n_s / self._n * math.pow(10.0, accuracy_decimal_places)) / math.pow(10.0, accuracy_decimal_places) * 100.0)
+        percent_decimal_places = accuracy_decimal_places - 2
+        if percent_decimal_places < 0:
+            basic_desc = '{}%'.format(round(self._n_s / self._n * 100))
+        else:
+            basic_desc = '{display_pct:.{display_decimal_places}f}%'.format(display_pct=self._n_s / self._n * 100.0, display_decimal_places=percent_decimal_places)
 
         if self._n_s < self._n * 0.5:
             extreme_decimal_places = math.log(self._n_s / self._n) / math.log(10)
@@ -423,7 +427,7 @@ def write_viz_to_images(primary_output_imagename: str, input_basicstats: Percent
     ax = matplotlib.pyplot.subplot()
     ax.set_ylim(bottom=0.0)
 
-    matplotlib.pyplot.xlabel('"true success rate"')
+    matplotlib.pyplot.xlabel('x="true success rate"')
     matplotlib.pyplot.ylabel('Probability')
     if adjustment_10y < 0:
         matplotlib.pyplot.text(0.0, ax.get_ylim()[1], '10^(−{})'.format(-adjustment_10y), verticalalignment='bottom', horizontalalignment='right')
@@ -443,11 +447,12 @@ def write_viz_to_images(primary_output_imagename: str, input_basicstats: Percent
     matplotlib.pyplot.title("But all of them would require us to present _two_ numbers to the reader (both a% AND b%),\nexcept… (skip to next image)", fontweight='bold')
     matplotlib.pyplot.plot(xs, adjusted_ys, '-', color='green')
     matplotlib.pyplot.text(0.5, plot_maxy, 'Any error bars we attempt to draw will face the dreaded "a% b%" problem, except… (skip to next image)\n', horizontalalignment='center', verticalalignment='bottom')
+    matplotlib.pyplot.plot([estimated_success_rate, estimated_success_rate], [0.0, plot_maxy], '--', color='gray')
 
     ax = matplotlib.pyplot.subplot()
     ax.set_ylim(bottom=0.0)
 
-    matplotlib.pyplot.xlabel('"true success rate"')
+    matplotlib.pyplot.xlabel('x="true success rate"')
     matplotlib.pyplot.ylabel('Probability')
     if adjustment_10y < 0:
         matplotlib.pyplot.text(0.0, ax.get_ylim()[1], '10^(−{})'.format(-adjustment_10y), verticalalignment='bottom', horizontalalignment='right')
@@ -473,19 +478,25 @@ def write_viz_to_images(primary_output_imagename: str, input_basicstats: Percent
         shaded_area_adjusted_ys = [math.exp(y - adjustment_lny) for y in shaded_area_ln_ys]
         ax.fill_between(shaded_area_xs, shaded_area_adjusted_ys, 0, color='grey', alpha=.382)
 
-        matplotlib.pyplot.suptitle("Each binomial dataset has exactly one unique point where a% ≃ b%.\nFor this dataset ({}), that value is a% ≃ b% ≃ {}% or \"the {}% range of certainty\"\n".format(input_basicstats.raw_counts_desc(), err_pct_str, confidence_pct_str), color='purple')
+        matplotlib.pyplot.suptitle("[SOLUTION] Every binomial dataset has exactly one unique point where a% ≃ b%.\nFor this dataset ({}), that value is a% ≃ b% ≃ {}% or \"the {}% range of certainty\"\n".format(input_basicstats.raw_counts_desc(), err_pct_str, confidence_pct_str), color='purple')
         matplotlib.pyplot.title("This {0}%-ile (≅ 100% − {1}%) \"error bar\" states that\n\"{1}% of the time, the error on our result is more than ±{1}% true success rate\"\n".format(confidence_pct_str, err_pct_str), fontweight='bold')
-        matplotlib.pyplot.plot([input_fancystats.conservative, input_fancystats.optimistic], [0.0, 0.0], '--', color='grey', label="This \"{0}%-ile error bar\" is correct {0}% of the time,\nand is also the {0}% confidence interval.".format(confidence_pct_str))
+        matplotlib.pyplot.plot([input_fancystats.conservative, input_fancystats.optimistic], [0.0, 0.0], '-', color='black', linewidth=1.0, label="This \"{0}%-ile error bar\" is correct {0}% of the time,\nand is also the {0}% confidence interval.".format(confidence_pct_str))
         matplotlib.pyplot.legend(loc='upper center')
+        ax.text(input_fancystats.conservative, shaded_area_adjusted_ys[0], 'x={:.0f}% '.format(100.0 * input_fancystats.conservative), color='purple', fontsize='small', horizontalalignment='right', verticalalignment='bottom')
+        ax.text(input_fancystats.optimistic, shaded_area_adjusted_ys[-1], ' x={:.0f}%'.format(100.0 * input_fancystats.optimistic), color='purple', fontsize='small', horizontalalignment='left', verticalalignment='bottom')
 
+
+    matplotlib.pyplot.axvline(x=input_fancystats.conservative, ymin=0, ymax=plot_maxy / ax.get_ylim()[1], color='black', linestyle='-', linewidth=1.0)
+    matplotlib.pyplot.axvline(x=input_fancystats.optimistic, ymin=0, ymax=plot_maxy / ax.get_ylim()[1], color='black', linestyle='-', linewidth=1.0)
     matplotlib.pyplot.text(estimated_success_rate, 0.0, "⇤ ±{}% ⇥\n".format(err_pct_str), horizontalalignment='center', verticalalignment='bottom', fontsize='x-large')
 
     ax.set_ylim(bottom=0.0)
+    ax.xaxis.set_tick_params(color='purple', labelcolor='purple')
+    for spine in ax.spines.values():
+        spine.set_edgecolor('purple')
 
-    matplotlib.pyplot.xlabel('"true success rate"')
+    matplotlib.pyplot.xlabel('x="true success rate"', color='purple')
     matplotlib.pyplot.ylabel('Probability')
-    matplotlib.pyplot.axvline(x=input_fancystats.conservative, ymin=0, ymax=plot_maxy / ax.get_ylim()[1], color='grey', linestyle='--')
-    matplotlib.pyplot.axvline(x=input_fancystats.optimistic, ymin=0, ymax=plot_maxy / ax.get_ylim()[1], color='grey', linestyle='--')
     if adjustment_10y < 0:
         matplotlib.pyplot.text(0.0, ax.get_ylim()[1], '10^(−{})'.format(-adjustment_10y), verticalalignment='bottom', horizontalalignment='right')
 
@@ -513,12 +524,18 @@ def write_viz_to_images(primary_output_imagename: str, input_basicstats: Percent
     ax = matplotlib.pyplot.subplot()
     ax.add_patch(matplotlib.patches.Rectangle((-rect_width_radius, 0.0), height=count_failures, width=rect_width_radius * 2.0, color='orange'))
     ax.add_patch(matplotlib.patches.Rectangle((1.0 - rect_width_radius, 0.0), height=count_successes, width=rect_width_radius * 2.0, color='orange'))
-    ax.xaxis.set_visible(False)
-    ax.yaxis.set_tick_params(labelright=True)
-    ax.spines['top'].set_visible(False)
+    ax.axis('off')
+    ax.spines['bottom'].set_visible(False)
+
+    matplotlib.pyplot.axvline(x=0.0, color='purple', linewidth=0.75)
+    matplotlib.pyplot.axvline(x=1.0, color='purple', linewidth=0.75)
+    matplotlib.pyplot.axhline(y=0.0, color='purple', linewidth=1)
+    matplotlib.pyplot.text(0.0, 0.0, "╵\n0.0", horizontalalignment='center', verticalalignment='top', color='black', fontsize='medium')
+    matplotlib.pyplot.text(1.0, 0.0, "╵\n1.0", horizontalalignment='center', verticalalignment='top', color='black', fontsize='medium')
+    matplotlib.pyplot.text(0.5, 0.0, "\n\n\"true success rate\"", horizontalalignment='center', verticalalignment='top', color='black')
 
     matplotlib.pyplot.suptitle('Conclusion:', fontweight='bold')
-    ax.text(observed_success_rate, conclusion_y, "\npredicted rate of success", color='black', horizontalalignment='center', verticalalignment='top', fontsize='small', fontstyle='italic')
+    ax.text(observed_success_rate, conclusion_y, "\npredicted rate of success\nwith simplified 'error bars'\n⇤ ±{}% ⇥".format(err_pct_str), color='black', horizontalalignment='center', verticalalignment='top', fontsize='small', fontstyle='italic')
 
     if input_fancystats.confidence_decimal_places >= CONFIG_ACCURACY_DECIMAL_POINTS:
         matplotlib.pyplot.title("For a dataset of {}, there is no need to draw error bars\nbeyond an accuracy of {}+ decimal places\n".format(input_basicstats.raw_counts_desc(), CONFIG_ACCURACY_DECIMAL_POINTS))
