@@ -546,6 +546,16 @@ def read_args() -> PercentageDataset:
 
     args = parser.parse_args()
 
+    if sum(x is None for x in [args.count_total, args.count_successes, args.count_failures]) == 3:
+        parser.error("""
+
+WELCOME! Please provide exactly two of:
+  --count-total
+  --count-successes
+  --count-failures
+
+(Ideally you'd provide two integers, but the code works just fine with floating point arguments as well.)""")
+
     if sum(x is None for x in [args.count_total, args.count_successes, args.count_failures]) != 1:
         # NOTE: Early return (panic)
         parser.error("""
